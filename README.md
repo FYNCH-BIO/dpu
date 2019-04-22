@@ -76,7 +76,7 @@ py setup.py install
 
 ## Run calibration code (after the raw values have been logged on the eVOLVER)
 
-List raw temperature JSON files logged on evolver 
+### List raw temperature JSON files logged on evolver 
 
 #### Mac
 ```sh
@@ -88,7 +88,7 @@ python3.6 calibration/calibrate.py -t -a 192.168.1.2 -g
 py calibration/calibrate.py -t -a 192.168.1.2 -g
 ```
 
-Choose temperature raw data file to update calibration with
+### Choose temperature raw data file to update calibration with
 
 #### Mac
 ```sh
@@ -99,7 +99,7 @@ python3.6 calibration/calibrate.py -t -a 192.168.1.2 -f 'Temp-2019-03-19 06:20:5
 py calibration/calibrate.py -t -a 192.168.1.2 -f 'Temp-2019-03-19 06:20:58.json'
 ```
 
-List raw OD JSON files logged on evolver 
+### List raw OD JSON files logged on evolver 
 
 #### Mac
 ```sh
@@ -111,7 +111,7 @@ python3.6 calibration/calibrate.py -o -a 192.168.1.2 -g
 py calibration/calibrate.py -o -a 192.168.1.2 -g 
 ```
 
-Choose OD raw data file to update calibration with (3D, necessary for algal growth module)
+### Choose OD raw data file to update calibration with (3D, necessary for algal growth module)
 
 ```sh
 python3.6 calibration/calibrate.py -o -a 192.168.1.2 -f <filename> 
