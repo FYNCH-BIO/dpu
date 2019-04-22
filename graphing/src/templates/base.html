@@ -1,0 +1,48 @@
+{% load staticfiles %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <title>{% block head_title %}CloudEvolution {% endblock %}</title>
+
+    {% include 'head_css.html' %}
+    {% include 'bokeh_css.html' %}
+
+    <style>
+    {% block style %}{% endblock %}
+    </style>
+
+    {% block bokeh_script %}{% endblock %}
+
+</head>
+
+<body>
+
+
+    {% include 'navbar.html' %}
+    <div id="wrapper">
+      <!-- Page Content -->
+        <div id="page-content-wrapper">
+            {% include 'sidebar.html' %}
+            <div class="container-fluid">
+                <div class="row">
+                    {% block content %}{% endblock %}
+                </div>
+            </div>
+        </div>
+        <!-- /#page-content-wrapper -->
+
+    </div>
+    <!-- /#wrapper -->
+
+    {% include 'javascript.html' %}
+
+</body>
+
+</html>

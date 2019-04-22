@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block head_title %} Welcome | {{ block.super }} {%endblock %}
+
+<style>
+{% block style %}
+
+
+{% endblock %}
+</style>
+
+
+
+{% block content %}
+
+    <div class="col-lg-12">
+        <h1>eVOLVER Graphing Tool</h1>
+        <p>This tool is used to graph data in the experiment directory. </p>
+        <p>NOTE: All experiment names must have 'expt' in the name to be properly graphed.</p>
+    </div>
+
+{% endblock %}

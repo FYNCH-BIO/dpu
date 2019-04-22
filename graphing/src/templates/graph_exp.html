@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+
+{% block bokeh_script %}
+
+
+
+{% endblock %}
+
+
+
+
+{% block content %}
+
+<div class="btn-toolbar" role="toolbar" aria-label="Toolbar with button groups">
+	{% for x in vial_count %}
+	<a href="{% url 'home' %}{{experiment}}/{{x}}" class="btn btn-default btn">{{x}}</a>
+	{% endfor %}
+
+</div>
+
+
+
+
+
+
+{% endblock%}

@@ -1,0 +1,5 @@
+{% for exp_name in sidebar_links %}
+	
+<li><a href="{% url 'home' %}{{ exp_name }}">{{ exp_name }}</a></li>
+
+{% endfor %}
