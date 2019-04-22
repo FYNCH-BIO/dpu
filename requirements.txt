@@ -1,0 +1,7 @@
+scipy>=1.2.1
+bokeh==0.10.0
+numpy>=1.16.1
+Django==1.8.6
+django-crispy-forms>=1.7.2
+matplotlib>=3.0.2
+socketIO-client>=0.7.2
