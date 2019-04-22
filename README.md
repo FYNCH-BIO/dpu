@@ -79,9 +79,5 @@ Choose OD raw data file to update calibration with (3D, necessary for algal grow
 python3.6 calibration/calibrate.py -o -a 192.168.1.2 -f <filename> 
 ```
 
-### Current release of the desktop app
-
-https://drive.google.com/file/d/1t1AT3HR2xQ9vskPBJkUi7idsUktA3ioB/view?usp=sharing
-
 
 
