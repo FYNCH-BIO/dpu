@@ -97,7 +97,7 @@ def turbidostat (OD_data, temp_data, vials, elapsed_time):
                 text_file.close()
                 ODset = lower_thresh[x]
                 # calculate growth rate
-                eVOLVER_module.calc_growth_rate(x, EXP_NAME, ODsettime, elapsed_time)
+                eVOLVER_module.calc_growth_rate(x, ODsettime, elapsed_time)
 
             #if have approx. reached lower threshold, note start of growth curve in ODset
             if (average_OD < (lower_thresh[x]+(upper_thresh[x] - lower_thresh[x])/3)) and (ODset != upper_thresh[x]):
@@ -114,6 +114,8 @@ def turbidostat (OD_data, temp_data, vials, elapsed_time):
                 if time_in > 20:
                     time_in = 20
 
+                time_in = round(time_in, 2)
+
                 save_path = os.path.dirname(os.path.realpath(__file__))
                 file_name =  "vial{0}_pump_log.txt".format(x)
                 file_path = os.path.join(save_path,EXP_NAME,'pump_log',file_name)
@@ -121,7 +123,7 @@ def turbidostat (OD_data, temp_data, vials, elapsed_time):
                 last_pump = data[len(data)-1][0]
                 if ((elapsed_time - last_pump)*60) >= pump_wait: # if sufficient time since last pump, send command to Arduino
                     MESSAGE = {'pumps_binary':"{0:b}".format(control[x]), 'pump_time': time_in, 'efflux_pump_time': time_out, 'delay_interval': 0, 'times_to_repeat': 0, 'run_efflux': 1}
-                    eVOLVER_module.fluid_command(MESSAGE, x, elapsed_time, pump_wait *60, EXP_NAME, time_in, 'y')
+                    eVOLVER_module.fluid_command(MESSAGE, x, elapsed_time, pump_wait *60, time_in, 'y')
 
         # your_FB_function_here() #good spot to call feedback functions for dynamic temperature, stirring, etc for ind. vials
     # your_function_here() #good spot to call non-feedback functions for dynamic temperature, stirring, etc.
@@ -206,7 +208,7 @@ def chemostat (OD_data, temp_data, vials, elapsed_time):
                     print('Chemostat updated in vial {0}'.format(x))
                     # writes command to chemo_config file, for storage
                     text_file = open(chemoconfig_path,"a+")
-                    text_file.write("{0},1,{1}\n".format(elapsed_time,period_config[x])) #note that this sets chemophase to 1
+                    text_file.write("{0},{1},{2}\n".format(elapsed_time,(last_chemophase+1),period_config[x])) #note that this changes chemophase
                     text_file.close()
 
         # your_FB_function_here() #good spot to call feedback functions for dynamic temperature, stirring, etc for ind. vials

@@ -174,7 +174,7 @@ def get_flow_rate():
 
 def calc_growth_rate(vial, gr_start, elapsed_time):
     save_path = os.path.dirname(os.path.realpath(__file__))
-    file_name =  "vial{0}_gr.txt".format(x) 
+    file_name =  "vial{0}_gr.txt".format(vial) 
     # Grab Data and make setpoint
     OD_path = os.path.join(save_path,custom_script.EXP_NAME,'OD',file_name)
     OD_data = np.genfromtxt(OD_path, delimiter=',')
@@ -267,10 +267,6 @@ def initialize_exp(vials):
         if custom_script.OPERATION_MODE == 'chemostat':
             os.makedirs(os.path.join(dir_path,'chemo_config'))
 
-        # copy current custom script to txt file
-        backup_filename = '{0}_{1}.txt'.format(custom_script.EXP_NAME,(time.strftime('%y%m%d_%H%M')))
-        shutil.copy('custom_script.py',os.path.join(save_path,custom_script.EXP_NAME,backup_filename))
-
         dpu_evolver_ns.emit('getcalibrationod', {}, namespace = '/dpu-evolver')
         while od_cal is None:
             pass
@@ -351,6 +347,9 @@ def initialize_exp(vials):
         # Restart chemostat pumps
         current_chemo = [0] * 16
 
+    # copy current custom script to txt file
+    backup_filename = '{0}_{1}.txt'.format(custom_script.EXP_NAME,(time.strftime('%y%m%d_%H%M')))
+    shutil.copy('custom_script.py',os.path.join(save_path,custom_script.EXP_NAME,backup_filename))
     return start_time, OD_initial
 
 def stop_all_pumps():

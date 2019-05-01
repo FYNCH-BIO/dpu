@@ -16,14 +16,6 @@ class make_GUI:
         home = Frame(note)
         note.add(home, text = "Home")
 
-        save_path = os.path.dirname(os.path.realpath(__file__))
-        tabArray = [ ]
-
-        for x in vials:
-            newTab = Frame(note)
-            note.add(newTab, text = "{0}".format(x))
-            tabArray.append(newTab)
-
         self.quitButton = Button(home, text="Pause Measuring / Stop Pumps", command=stop_exp)
         self.quitButton.pack(side=BOTTOM)
 
