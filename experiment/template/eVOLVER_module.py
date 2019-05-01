@@ -174,9 +174,9 @@ def get_flow_rate():
 
 def calc_growth_rate(vial, gr_start, elapsed_time):
     save_path = os.path.dirname(os.path.realpath(__file__))
-    file_name =  "vial{0}_gr.txt".format(vial) 
+    ODfile_name =  "vial{0}_OD.txt".format(vial) 
     # Grab Data and make setpoint
-    OD_path = os.path.join(save_path,custom_script.EXP_NAME,'OD',file_name)
+    OD_path = os.path.join(save_path,custom_script.EXP_NAME,'OD',ODfile_name)
     OD_data = np.genfromtxt(OD_path, delimiter=',')
     raw_time=OD_data[:,0]
     raw_OD=OD_data[:,1]
@@ -192,6 +192,7 @@ def calc_growth_rate(vial, gr_start, elapsed_time):
     slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(trim_time[np.isfinite(log_OD)],log_OD[np.isfinite(log_OD)])
 
     # Save slope to file
+    file_name =  "vial{0}_gr.txt".format(vial)
     gr_path = os.path.join(save_path,custom_script.EXP_NAME,'growthrate',file_name)
     text_file = open(gr_path,"a+")
     text_file.write("{0},{1}\n".format(elapsed_time,slope))
