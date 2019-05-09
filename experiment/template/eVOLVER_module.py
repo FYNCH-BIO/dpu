@@ -83,7 +83,7 @@ def read_data(vials, exp_name):
 
     wait_for_data = True
     stop_waiting = False
-    dpu_evolver_ns.emit('data', {'config':{'od':[4095] * 16, 'temp':['NaN'] * 16}}, namespace='/dpu-evolver')
+    dpu_evolver_ns.emit('data', {'config':{'od':[2500] * 16, 'temp':['NaN'] * 16}}, namespace='/dpu-evolver')
     start_time = time.time()
     # print('Fetching data from eVOLVER')
     while(wait_for_data):
