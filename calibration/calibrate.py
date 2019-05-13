@@ -263,7 +263,7 @@ if __name__ == '__main__':
     parser.add_option('-o', '--od', action = 'store_true', dest = 'odcal')
     parser.add_option('-t', '--temp', action = 'store_true', dest = 'tempcal')
     parser.add_option('-a', '--ip', action = 'store', dest = 'ipaddress')
-    parser.add_option('--odpower', action = 'store', dest = 'odpower', default='4095')
+    parser.add_option('--odpower', action = 'store', dest = 'odpower', default='2500')
     parser.add_option('--odaxis', action = 'store', dest = 'odaxis', default='powerLevel')
     parser.add_option('--3d', action = 'store_true', dest = 'multidimfit')
 
