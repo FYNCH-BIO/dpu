@@ -83,11 +83,11 @@ def read_data(vials, exp_name):
 
     wait_for_data = True
     stop_waiting = False
-    dpu_evolver_ns.emit('data', {'config':{'od':[4095] * 16, 'temp':['NaN'] * 16}}, namespace='/dpu-evolver')
+    dpu_evolver_ns.emit('data', {'config':{'od':[2500] * 16, 'temp':['NaN'] * 16}}, namespace='/dpu-evolver')
     start_time = time.time()
     # print('Fetching data from eVOLVER')
     while(wait_for_data):
-        if not connected or stop_waiting or (time.time() - start_time > 60):
+        if not connected or stop_waiting or (time.time() - start_time > 30):
             wait_for_data = False
             print('Issue with eVOLVER communication - skipping data acquisition')
             return None, None
