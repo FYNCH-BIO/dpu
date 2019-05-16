@@ -1,26 +1,31 @@
-import eVOLVER_module
-import numpy as np
-import os.path
+#!/usr/bin/env python3
+
 import time
+import os.path
+import logging
+import numpy as np
+import eVOLVER_module
 
-
-# This code will operate eVOLVER as a pulsatile chemostat, with user-specified temperature, stir rate, dilution rate, dilution start time, and dilution start OD.
-# The code waits for the specified time, permits the culture to grow up to the specified starting OD, then initiates repeated dilutions according to specified dilution rate.
-# Last Updated: Chris Mancuso 07/24/18
+# logger setup
+logger = logging.getLogger(__name__)
 
 def choose_name():
-    ##### Sets name of experiment folder, make new name for each experiment, otherwise files will be overwritten
-
     ##### USER DEFINED FIELDS #####
 
-    exp_name = 'test_expt'
-    evolver_ip = '192.168.1.36'
+    exp_name = 'evolver_expt'
+    evolver_ip = '192.168.1.1'
     evolver_port = 8081
     return exp_name, evolver_ip, evolver_port
 
     ##### END OF USER DEFINED FIELDS #####
 
-def test (OD_data, temp_data, vials, elapsed_time, exp_name):
+# uncomment the line of the desired routine as "user_routine"
+
+def user_routine(OD_data, temp_data, vials, elapsed_time, exp_name):
+    turbidostat(OD_data, temp_data, vials, elapsed_time, exp_name)
+    #chemostat(OD_data, temp_data, vials, elapsed_time, exp_name)
+
+def turbidostat(OD_data, temp_data, vials, elapsed_time, exp_name):
 
     ##### USER DEFINED VARIABLES #####
 
@@ -29,8 +34,14 @@ def test (OD_data, temp_data, vials, elapsed_time, exp_name):
 
     lower_thresh = np.array([9999] * len(vials))
     upper_thresh = np.array([9999] * len(vials))
-    # lower_thresh = np.array([0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2])
-    # upper_thresh = np.array([0.4,0.4,0.4,0.4,0.4,0.4,0.4,0.4,0.4,0.4,0.4,0.4,0.4,0.4,0.4,0.4])
+    # lower_thresh = np.array([0.2, 0.2, 0.2, 0.2,
+    #                          0.2, 0.2, 0.2, 0.2,
+    #                          0.2, 0.2, 0.2, 0.2,
+    #                          0.2, 0.2, 0.2, 0.2])
+    # upper_thresh = np.array([0.4, 0.4, 0.4, 0.4,
+    #                          0.4, 0.4, 0.4, 0.4,
+    #                          0.4, 0.4, 0.4, 0.4,
+    #                          0.4, 0.4, 0.4, 0.4])
 
     ##### END OF USER DEFINED VARIABLES #####
 
@@ -42,9 +53,11 @@ def test (OD_data, temp_data, vials, elapsed_time, exp_name):
     time_out = 15 #(sec) additional amount of time to run efflux pump
     pump_wait = 3 # (min) minimum amount of time to wait between pump events
     control = np.power(2,range(0,32)) #vial addresses
-    flow_rate = np.array([0.95,1.1,0.975,0.85,0.95,1.05,1.05,1.05,1.025,1.125,1.0,1.0,1.05,1.15,1.1,1.025]) #ml/sec, paste from pump calibration
-    volume =  30 #mL, determined by straw length
-
+    flow_rate = np.array([0.95, 1.1, 0.975, 0.85,
+                          0.95, 1.05, 1.05, 1.05,
+                          1.025, 1.125, 1.0, 1.0,
+                          1.05,1.15,1.1,1.025]) #ml/sec, paste from pump calibration
+    volume =  25 #mL, determined by straw length
 
     save_path = os.path.dirname(os.path.realpath(__file__)) #save path
 
@@ -52,8 +65,6 @@ def test (OD_data, temp_data, vials, elapsed_time, exp_name):
 
 
     ##### Turbidostat Control Code Below #####
-
-
     for x in vials: #main loop through each vial
 
         # Update temperature configuration files for each vial
@@ -62,14 +73,15 @@ def test (OD_data, temp_data, vials, elapsed_time, exp_name):
         temp_config = np.genfromtxt(tempconfig_path, delimiter=',')
 
         if (len(temp_config) is 2): #set temp at the beginning of the experiment, can clone for subsequent temp changes
-                if np.isscalar(temp_input):
-                    temp_val = temp_input
-                else:
-                    temp_val = temp_input[x]
+            logger.info('updating temperature configuration for vial %d' % x)
+            if np.isscalar(temp_input):
+                temp_val = temp_input
+            else:
+                temp_val = temp_input[x]
 
-                text_file = open(tempconfig_path,"a+")
-                text_file.write("{0},{1}\n".format(elapsed_time, temp_val))
-                text_file.close()
+            text_file = open(tempconfig_path,"a+")
+            text_file.write("{0},{1}\n".format(elapsed_time, temp_val))
+            text_file.close()
 
         # Update turbidostat configuration files for each vial
         # initialize OD and find OD path
@@ -105,7 +117,6 @@ def test (OD_data, temp_data, vials, elapsed_time, exp_name):
                 ODset = upper_thresh[x]
 
             if average_OD > ODset:
-
                 time_in = - (np.log(lower_thresh[x]/average_OD)*volume)/flow_rate[x]
 
                 if time_in > 20:
@@ -117,13 +128,20 @@ def test (OD_data, temp_data, vials, elapsed_time, exp_name):
                 data = np.genfromtxt(file_path, delimiter=',')
                 last_pump = data[len(data)-1][0]
                 if ((elapsed_time - last_pump)*60) >= pump_wait:
-                    MESSAGE = {'pumps_binary':"{0:b}".format(control[x]), 'pump_time': time_in, 'efflux_pump_time': time_out, 'delay_interval': 0, 'times_to_repeat': 0, 'run_efflux': 1}
-                    eVOLVER_module.fluid_command(MESSAGE, x, elapsed_time, pump_wait *60, exp_name, time_in, 'y')
+                    logger.info('turbidostat dilution for vial %d' % x)
+                    MESSAGE = {'pumps_binary':"{0:b}".format(control[x]),
+                               'pump_time': time_in,
+                               'efflux_pump_time': time_out,
+                               'delay_interval': 0,
+                               'times_to_repeat': 0,
+                               'run_efflux': 1}
+                    eVOLVER_module.fluid_command(MESSAGE, x, elapsed_time,
+                                                 pump_wait *60, exp_name,
+                                                 time_in, 'y')
+        else:
+            logger.info('less than 7 OD measurements for vial %d' % x)
 
-
-    # end of test() fxn
-
-def test_chemostat (OD_data, temp_data, vials, elapsed_time, exp_name):
+def chemostat(OD_data, temp_data, vials, elapsed_time, exp_name):
 
     ##### USER DEFINED VARIABLES #####
 
@@ -133,49 +151,56 @@ def test_chemostat (OD_data, temp_data, vials, elapsed_time, exp_name):
     start_OD = 0 # ~OD600, set to 0 to start chemostate dilutions at any positive OD
 
     start_time1 = 0 #hours, set 0 to start immediately
-    rate_config1 = np.array([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]) #UNITS of 1/hr, NOT mL/hr, so dilution rate ~ growth rate, set to 0 for unused vials.
+    rate_config1 = np.array([1, 2, 3, 4,
+                             5, 6, 7, 8,
+                             9, 10, 11, 12,
+                             13, 14, 15, 16]) #UNITS of 1/hr, NOT mL/hr, so dilution rate ~ growth rate, set to 0 for unused vials.
 
     #start_timeN = XX #define as many as needed if successive rounds with different flow rates needed
     #rate_configN = XX #define as many as needed if successive rounds with different flow rates needed
 
     ##### END OF USER DEFINED VARIABLES #####
 
-
     ##### Calibration Values:
     # Be sure to check that OD_cal.txt and temp_calibration.txt are up to date
     # Additional calibration values below, remain the same between experiments
 
     control = np.power(2,range(0,32)) #vial addresses
-    flow_rate = np.array([1.1,1.1,1.1,1.1,1.1,1.1,1.1,1.1,1.1,1.1,1.1,1.1,1.1,1.1,1.1,1.1]) #ml/sec, paste from pump calibration
+    flow_rate = np.array([1.1, 1.1, 1.1, 1.1,
+                          1.1, 1.1, 1.1, 1.1,
+                          1.1, 1.1, 1.1, 1.1,
+                          1.1, 1.1, 1.1, 1.1]) #ml/sec, paste from pump calibration
     volume =  25 #mL, determined by straw length
     bolus = 500 #uL, can be changed with great caution, 200uL is absolute minimum
-    period_config = np.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) #initialize array
+    period_config = np.array([0, 0, 0, 0,
+                              0, 0, 0, 0,
+                              0, 0, 0, 0,
+                              0, 0, 0, 0]) #initialize array
     save_path = os.path.dirname(os.path.realpath(__file__)) #save path
 
     bolus_in_s = flow_rate * (bolus / 1000)
 
     ##### End of Calibration Values
 
-
     ##### Chemostat Control Code Below #####
 
-
     for x in vials: #main loop through each vial
-
         # Update temperature configuration files for each vial
         file_name =  "vial{0}_tempconfig.txt".format(x)
-        tempconfig_path = os.path.join(save_path,exp_name,'temp_config',file_name)
+        tempconfig_path = os.path.join(save_path,exp_name,'temp_config',
+                                       file_name)
         temp_config = np.genfromtxt(tempconfig_path, delimiter=',')
 
         if (len(temp_config) is 2): #set temp at the beginning of the experiment, can clone for subsequent temp changes
-                if np.isscalar(temp_input):
-                    temp_val = temp_input
-                else:
-                    temp_val = temp_input[x]
+            logger.info('updating temperature configuration for vial %d' % x)
+            if np.isscalar(temp_input):
+                temp_val = temp_input
+            else:
+                temp_val = temp_input[x]
 
-                text_file = open(tempconfig_path,"a+")
-                text_file.write("{0},{1}\n".format(elapsed_time, temp_val))
-                text_file.close()
+            text_file = open(tempconfig_path,"a+")
+            text_file.write("{0},{1}\n".format(elapsed_time, temp_val))
+            text_file.close()
 
         # Update chemostat configuration files for each vial
 
@@ -191,7 +216,8 @@ def test_chemostat (OD_data, temp_data, vials, elapsed_time, exp_name):
 
             # set chemostat config path and pull current state from file
             file_name =  "vial{0}_chemoconfig.txt".format(x)
-            chemoconfig_path = os.path.join(save_path,exp_name,'chemo_config',file_name)
+            chemoconfig_path = os.path.join(save_path,exp_name,'chemo_config',
+                                            file_name)
             chemo_config = np.genfromtxt(chemoconfig_path, delimiter=',')
             last_chemoset = chemo_config[len(chemo_config)-1][0] #should t=0 initially, changes each time a new command is written to file
             last_chemophase = chemo_config[len(chemo_config)-1][1] #should be zero initially, changes each time a new command is written to file
@@ -210,9 +236,12 @@ def test_chemostat (OD_data, temp_data, vials, elapsed_time, exp_name):
                         period_config[x] = 0
 
                     print('Chemostat initiated in vial {0}'.format(x))
+                    logger.info('chemostat initiated for vial %d, period %.2f'
+                                % (x, period_config[x]))
                     # writes command to chemo_config file, for storage
                     text_file = open(chemoconfig_path,"a+")
-                    text_file.write("{0},1,{1}\n".format(elapsed_time,period_config[x])) #note that this sets chemophase to 1
+                    text_file.write("{0},1,{1}\n".format(elapsed_time,
+                                                         period_config[x])) #note that this sets chemophase to 1
                     text_file.close()
 
                 ##### Sample code below for subsequent chemostat phases, be sure to update N in variable names etc.
@@ -231,7 +260,8 @@ def test_chemostat (OD_data, temp_data, vials, elapsed_time, exp_name):
                 #     text_file = open(chemoconfig_path,"a+")
                 #     text_file.write("%f,N,%i\n" %  (elapsed_time,period_config[x])) #note that this sets chemophase to N, replace with integer value
                 #     text_file.close()
-
+        else:
+            logger.info('less than 7 OD measurements for vial %d' % x)
         #end of main loop through vials
 
     #Update chemostat command after all vials are dealt with
@@ -248,5 +278,3 @@ def test_chemostat (OD_data, temp_data, vials, elapsed_time, exp_name):
         STIR_MESSAGE = list(map(int, stir_val.split(',')))
 
     eVOLVER_module.stir_rate(STIR_MESSAGE)
-
-    # end of test() fxn
