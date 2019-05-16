@@ -14,8 +14,6 @@ import asyncio
 # logger set up
 logger = logging.getLogger(__name__)
 
-plt.ioff()
-
 dpu_evolver_ns = None
 received_data = {}
 od_cal = None
