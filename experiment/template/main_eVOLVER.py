@@ -133,3 +133,6 @@ if __name__ == '__main__':
                 print('Experiment stopped, goodbye!')
                 logger.warning('experiment stopped, goodbye!')
                 break
+        except Exception as e:
+            logger.critical('exception %s stopped the experiment' % str(e))
+            break
