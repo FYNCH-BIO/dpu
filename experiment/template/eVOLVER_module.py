@@ -88,7 +88,7 @@ def read_data(vials):
     start_time = time.time()
     # print('Fetching data from eVOLVER')
     while(wait_for_data):
-        if not connected or stop_waiting or (time.time() - start_time > 60):
+        if not connected or stop_waiting or (time.time() - start_time > 30):
             wait_for_data = False
             print('Issue with eVOLVER communication - skipping data acquisition')
             return None, None
