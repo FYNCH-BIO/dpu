@@ -173,7 +173,7 @@ def fluid_command(MESSAGE, vial, elapsed_time, pump_wait, exp_name, time_on,
         text_file = open(file_path,"a+")
         text_file.write("{0},{1}\n".format(elapsed_time, time_on))
         text_file.close()
-
+        
 def update_chemo(vials, bolus_in_s):
     global current_chemo
 
@@ -188,12 +188,20 @@ def update_chemo(vials, bolus_in_s):
         chemo_set = data[len(data)-1][2]
         if not chemo_set == current_chemo[x]:
             current_chemo[x] = chemo_set
-            MESSAGE = {'pumps_binary':"{0:b}".format(control[x]),
-                       'pump_time': bolus_in_s[x],
-                       'efflux_pump_time': bolus_in_s[x] * 2,
-                       'delay_interval': chemo_set,
-                       'times_to_repeat': -1, 'run_efflux': 1}
+            if chemo_set == 0:
+                time_on = 0
+                time_off = 0
+                t_rep = 0
+            else:
+                time_on = bolus_in_s[x]
+                time_off = (bolus_in_s[x]*2)
+                t_rep = -1
             logger.debug('updating chemostat for pump %d: %s' % (x, MESSAGE))
+            MESSAGE = {'pumps_binary':"{0:b}".format(control[x]),
+                       'pump_time': time_on,
+                       'efflux_pump_time': time_off,
+                       'delay_interval': chemo_set,
+                       'times_to_repeat': t_rep, 'run_efflux': 1}
             command = {'param': 'pump', 'message': MESSAGE}
             dpu_evolver_ns.emit('command', command, namespace = '/dpu-evolver')
 
