@@ -51,7 +51,7 @@ def update_eVOLVER():
     # read and record OD
     elapsed_time = round((time.time() - start_time)/3600,4)
     logger.debug('elapsed time: %.4f hours' % elapsed_time)
-    print("{0}: {1} Hours".format(custom_script.EXP_NAME,elapsed_time))
+    print("{0}: {1} Hours".format(custom_script.EXP_NAME ,elapsed_time))
     OD_data, temp_data = eVOLVER_module.read_data(vials)
     if OD_data is not None and temp_data is not None:
         if OD_data == 'empty':
