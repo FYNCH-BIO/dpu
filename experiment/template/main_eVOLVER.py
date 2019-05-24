@@ -19,9 +19,10 @@ def get_options():
                              '(i.e. continues from existing experiment, '
                              'overwrites existing data and blanks OD '
                              'measurements)')
-    parser.add_argument('--log-path',
+    parser.add_argument('--log-name',
                         default='evolver.log',
-                        help='Path to the log file (default: %(default)s)')
+                        help='Log file name, stored inside the experiment '
+                             'directory (default: %(default)s)')
 
     log_nolog = parser.add_mutually_exclusive_group()
     log_nolog.add_argument('--verbose', action='count',
@@ -86,6 +87,14 @@ if __name__ == '__main__':
 
     #changes terminal tab title in OSX
     print('\x1B]0;eVOLVER EXPERIMENT: PRESS Ctrl-C TO PAUSE\x07')
+
+    # silence logging until experiment is initialized
+    logging.basicConfig(level=logging.CRITICAL + 10)
+
+    vials = range(0, 16)
+    start_time, OD_initial = eVOLVER_module.initialize_exp(vials,
+                                                 always_yes=options.always_yes)
+
     # logging setup
     if options.quiet:
         logging.basicConfig(level=logging.CRITICAL + 10)
@@ -97,12 +106,10 @@ if __name__ == '__main__':
         logging.basicConfig(format='%(asctime)s - %(name)s - [%(levelname)s] '
                             '- %(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S',
-                            filename=options.log_path,
+                            filename=os.path.join(custom_script.EXP_NAME,
+                                                  options.log_name),
                             level=level)
 
-    vials = range(0, 16)
-    start_time, OD_initial = eVOLVER_module.initialize_exp(vials,
-                                                 always_yes=options.always_yes)
     loop_start = time.time()
     while True:
         try:
