@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from socketIO_client import SocketIO, BaseNamespace
 from threading import Thread
 import asyncio
+import custom_script
 
 plt.ioff()
 
@@ -70,24 +71,24 @@ class EvolverNamespace(BaseNamespace):
             f.write(data)
         temp_cal = True
 
-def read_data(vials, exp_name):
+def read_data(vials):
     global wait_for_data, received_data, current_temps, connected, stop_waiting, shared_ip, shared_port
 
     save_path = os.path.dirname(os.path.realpath(__file__))
 
-    odcal_path = os.path.join(save_path,exp_name,'od_cal.txt')
-    od_cal = np.genfromtxt(odcal_path, delimiter=',')
+    odcal_path = os.path.join(save_path,custom_script.EXP_NAME,'od_cal.txt')
+    od_cal = np.genfromtxt(odcal_path, delimiter=',')    
 
-    tempcal_path = os.path.join(save_path,exp_name,'temp_calibration.txt')
+    tempcal_path = os.path.join(save_path,custom_script.EXP_NAME,'temp_calibration.txt')
     temp_cal = np.genfromtxt(tempcal_path, delimiter=',')
 
     wait_for_data = True
     stop_waiting = False
-    dpu_evolver_ns.emit('data', {'config':{'od':[4095] * 16, 'temp':['NaN'] * 16}}, namespace='/dpu-evolver')
+    dpu_evolver_ns.emit('data', {'config':{'od':[custom_script.OD_POWER] * 16, 'temp':['NaN'] * 16}}, namespace='/dpu-evolver')
     start_time = time.time()
     # print('Fetching data from eVOLVER')
     while(wait_for_data):
-        if not connected or stop_waiting or (time.time() - start_time > 60):
+        if not connected or stop_waiting or (time.time() - start_time > 30):
             wait_for_data = False
             print('Issue with eVOLVER communication - skipping data acquisition')
             return None, None
@@ -102,14 +103,14 @@ def read_data(vials, exp_name):
     temps = []
     for x in vials:
         file_name =  "vial{0}_tempconfig.txt".format(x)
-        file_path = os.path.join(save_path,exp_name,'temp_config',file_name)
+        file_path = os.path.join(save_path,custom_script.EXP_NAME,'temp_config',file_name)
         temp_set_data = np.genfromtxt(file_path, delimiter=',')
         temp_set = temp_set_data[len(temp_set_data)-1][1]
-        temp_set = int((temp_set - temp_cal[1][x])/temp_cal[0][x])
+        temp_set = int((temp_set - temp_cal[1][x])/temp_cal[0][x]) #convert raw thermistor data into temp using calibration fit
         temps.append(temp_set)
 
         try:
-            if (od_cal.shape[0] == 4):
+            if (od_cal.shape[0] == 4): #convert raw photodiode data into ODdata using calibration curve
                 od_data[x] = np.real(od_cal[2,x] - ((np.log10((od_cal[1,x]-od_cal[0,x])/(float(od_data[x]) - od_cal[0,x])-1))/od_cal[3,x]))
         except ValueError:
             print("OD Read Error")
@@ -127,35 +128,42 @@ def read_data(vials, exp_name):
 
     return od_data, temp_data
 
-def fluid_command(MESSAGE, vial, elapsed_time, pump_wait, exp_name, time_on, file_write):
+def fluid_command(MESSAGE, vial, elapsed_time, pump_wait, time_on, file_write):
     command = {'param':'pump', 'message':MESSAGE}
     dpu_evolver_ns.emit('command', command, namespace='/dpu-evolver')
 
     save_path = os.path.dirname(os.path.realpath(__file__))
 
     file_name =  "vial{0}_pump_log.txt".format(vial)
-    file_path = os.path.join(save_path,exp_name,'pump_log',file_name)
+    file_path = os.path.join(save_path,custom_script.EXP_NAME,'pump_log',file_name)
 
     if file_write == 'y':
         text_file = open(file_path,"a+")
         text_file.write("{0},{1}\n".format(elapsed_time, time_on))
         text_file.close()
-
-def update_chemo(vials, exp_name, bolus_in_s, control):
-
+        
+def update_chemo(vials, bolus_in_s):
     global current_chemo
 
     save_path = os.path.dirname(os.path.realpath(__file__))
     MESSAGE = {}
     for x in vials:
-        file_name =  "vial{0}__chemoconfig.txt".format(x)
-        file_path = os.path.join(save_path,exp_name,'chemo_config',file_name)
+        file_name =  "vial{0}_chemoconfig.txt".format(x)
+        file_path = os.path.join(save_path,custom_script.EXP_NAME,'chemo_config',file_name)
 
         data = np.genfromtxt(file_path, delimiter=',')
         chemo_set = data[len(data)-1][2]
         if not chemo_set == current_chemo[x]:
             current_chemo[x] = chemo_set
-            MESSAGE = {'pumps_binary':"{0:b}".format(control[x]), 'pump_time': bolus_in_s[x], 'efflux_pump_time': bolus_in_s[x] * 2, 'delay_interval': chemo_set, 'times_to_repeat': -1, 'run_efflux': 1}
+            if chemo_set == 0:
+                time_on = 0
+                time_off = 0
+                t_rep = 0
+            else:
+                time_on = bolus_in_s[x]
+                time_off = (bolus_in_s[x]*2)
+                t_rep = -1
+            MESSAGE = {'pumps_binary':"{0:b}".format(control[x]), 'pump_time': time_on, 'efflux_pump_time': time_off, 'delay_interval': chemo_set, 'times_to_repeat': t_rep, 'run_efflux': 1}
             command = {'param': 'pump', 'message': MESSAGE}
             dpu_evolver_ns.emit('command', command, namespace = '/dpu-evolver')
 
@@ -163,14 +171,49 @@ def stir_rate (MESSAGE):
     command = {'param':'stir', 'message':MESSAGE}
     dpu_evolver_ns.emit('command', command, namespace='/dpu-evolver')
 
-def parse_data(data, elapsed_time, vials, exp_name, parameter):
+def get_flow_rate():
+    file_path = os.path.join(save_path,custom_script.PUMP_CAL_FILE)
+    flow_calibration = np.loadtxt(file_path, delimiter="\t")
+    if len(flow_calibration)==16:
+        flow_rate=flow_calibration
+    else:
+        flow_rate=flow_calibration[0,:] #Currently just implementing influx flow rate
+    return flow_rate
+
+def calc_growth_rate(vial, gr_start, elapsed_time):
+    save_path = os.path.dirname(os.path.realpath(__file__))
+    ODfile_name =  "vial{0}_OD.txt".format(vial) 
+    # Grab Data and make setpoint
+    OD_path = os.path.join(save_path,custom_script.EXP_NAME,'OD',ODfile_name)
+    OD_data = np.genfromtxt(OD_path, delimiter=',')
+    raw_time=OD_data[:,0]
+    raw_OD=OD_data[:,1]
+    raw_time=raw_time[np.isfinite(raw_OD)]
+    raw_OD=raw_OD[np.isfinite(raw_OD)]
+
+    # Trim points prior to gr_start
+    trim_time=raw_time[np.nonzero(np.where(raw_time>gr_start,1,0))]
+    trim_OD=raw_OD[np.nonzero(np.where(raw_time>gr_start,1,0))]
+
+    # Take natural log, calculate slope
+    log_OD = np.log(trim_OD)
+    slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(trim_time[np.isfinite(log_OD)],log_OD[np.isfinite(log_OD)])
+
+    # Save slope to file
+    file_name =  "vial{0}_gr.txt".format(vial)
+    gr_path = os.path.join(save_path,custom_script.EXP_NAME,'growthrate',file_name)
+    text_file = open(gr_path,"a+")
+    text_file.write("{0},{1}\n".format(elapsed_time,slope))
+    text_file.close()
+
+def parse_data(data, elapsed_time, vials, parameter):
     save_path = os.path.dirname(os.path.realpath(__file__))
     if data == 'empty':
         print("%s Data Empty! Skipping data log...".format(parameter))
     else:
         for x in vials:
             file_name =  "vial{0}_{1}.txt".format(x, parameter)
-            file_path = os.path.join(save_path,exp_name,parameter,file_name)
+            file_path = os.path.join(save_path,custom_script.EXP_NAME,parameter,file_name)
             text_file = open(file_path,"a+")
             text_file.write("{0},{1}\n".format(elapsed_time, data[x]))
             text_file.close()
@@ -179,28 +222,28 @@ def start_background_loop(loop):
     asyncio.set_event_loop(loop)
     loop.run_forever()
 
-def run(evolver_ip, evolver_port):
+def run():
     global dpu_evolver_ns
-    socketIO = SocketIO(evolver_ip, evolver_port)
+    socketIO = SocketIO(custom_script.EVOLVER_IP, custom_script.EVOLVER_PORT)
     dpu_evolver_ns = socketIO.define(EvolverNamespace, '/dpu-evolver')
     socketIO.wait()
 
-def initialize_exp(exp_name, vials, evolver_ip, evolver_port):
+def initialize_exp(vials):
     global od_cal, temp_cal, shared_name, shared_ip, shared_port
-    shared_name = exp_name
-    shared_ip = evolver_ip
-    shared_port = evolver_port
+    shared_name = custom_script.EXP_NAME
+    shared_ip = custom_script.EVOLVER_IP
+    shared_port = custom_script.EVOLVER_PORT
     new_loop = asyncio.new_event_loop()
     t = Thread(target = start_background_loop, args = (new_loop,))
     t.daemon = True
     t.start()
-    new_loop.call_soon_threadsafe(run, evolver_ip, evolver_port)
+    new_loop.call_soon_threadsafe(run)
 
     if dpu_evolver_ns is None:
         print("Waiting for evolver connection...")
 
     save_path = os.path.dirname(os.path.realpath(__file__))
-    dir_path = os.path.join(save_path,exp_name)
+    dir_path = os.path.join(save_path,custom_script.EXP_NAME)
 
 
 
@@ -225,10 +268,13 @@ def initialize_exp(exp_name, vials, evolver_ip, evolver_port):
 
         os.makedirs(os.path.join(dir_path,'OD'))
         os.makedirs(os.path.join(dir_path,'temp'))
-        os.makedirs(os.path.join(dir_path,'pump_log'))
         os.makedirs(os.path.join(dir_path,'temp_config'))
-        os.makedirs(os.path.join(dir_path,'ODset'))
-        os.makedirs(os.path.join(dir_path,'chemo_config'))
+        if custom_script.OPERATION_MODE == 'turbidostat':
+            os.makedirs(os.path.join(dir_path,'pump_log'))
+            os.makedirs(os.path.join(dir_path,'ODset'))
+            os.makedirs(os.path.join(dir_path,'growthrate'))
+        if custom_script.OPERATION_MODE == 'chemostat':
+            os.makedirs(os.path.join(dir_path,'chemo_config'))
 
         dpu_evolver_ns.emit('getcalibrationod', {}, namespace = '/dpu-evolver')
         while od_cal is None:
@@ -239,58 +285,68 @@ def initialize_exp(exp_name, vials, evolver_ip, evolver_port):
             pass
 
         for x in vials:
-            file_name =  "vial{0}_OD.txt".format(x)
+            file_name =  "vial{0}_OD.txt".format(x) # make OD file
             file_path = os.path.join(dir_path,'OD',file_name)
             text_file = open(file_path,"w")
-            text_file.write("Experiment: {0} vial {1}, {2}\n".format(exp_name, x, time.strftime("%c")))
+            text_file.write("Experiment: {0} vial {1}, {2}\n".format(custom_script.EXP_NAME, x, time.strftime("%c")))
             text_file.close()
 
-            file_name =  "vial{0}_temp.txt".format(x)
+            file_name =  "vial{0}_temp.txt".format(x) # make temperature data file
             file_path = os.path.join(dir_path,'temp',file_name)
             text_file = open(file_path,"w").close()
 
-            file_name =  "vial{0}_tempconfig.txt".format(x)
+            file_name =  "vial{0}_tempconfig.txt".format(x) # make temperature configuration file
             file_path = os.path.join(dir_path,'temp_config',file_name)
             text_file = open(file_path,"w")
-            text_file.write("Experiment: {0} vial {1}, {2}\n".format(exp_name, x, time.strftime("%c")))
-            text_file.write("0,0\n")
+            text_file.write("Experiment: {0} vial {1}, {2}\n".format(custom_script.EXP_NAME, x, time.strftime("%c")))
+            text_file.write("0,{0}\n".format(custom_script.TEMP_INITIAL[x])) #initialize based on custom_script.choose_setup()
             text_file.close()
 
-            file_name =  "vial{0}_pump_log.txt".format(x)
-            file_path = os.path.join(dir_path,'pump_log',file_name)
-            text_file = open(file_path,"w")
-            text_file.write("Experiment: {0} vial {1}, {2}\n".format(exp_name, x, time.strftime("%c")))
-            text_file.write("0,0\n")
-            text_file.close()
+            if custom_script.OPERATION_MODE == 'turbidostat':
+                file_name =  "vial{0}_pump_log.txt".format(x) # make pump log file
+                file_path = os.path.join(dir_path,'pump_log',file_name)
+                text_file = open(file_path,"w")
+                text_file.write("Experiment: {0} vial {1}, {2}\n".format(custom_script.EXP_NAME, x, time.strftime("%c")))
+                text_file.write("0,0\n")
+                text_file.close()
 
-            file_name =  "vial{0}_ODset.txt".format(x)
-            file_path = os.path.join(dir_path,'ODset',file_name)
-            text_file = open(file_path,"w")
-            text_file.write("Experiment: {0} vial {1}, {2}\n".format(exp_name, x, time.strftime("%c")))
-            text_file.write("0,0\n")
-            text_file.close()
+                file_name =  "vial{0}_ODset.txt".format(x) # make ODset file
+                file_path = os.path.join(dir_path,'ODset',file_name)
+                text_file = open(file_path,"w")
+                text_file.write("Experiment: {0} vial {1}, {2}\n".format(custom_script.EXP_NAME, x, time.strftime("%c")))
+                text_file.write("0,0\n")
+                text_file.close()
 
-            file_name =  "vial{0}_chemoconfig.txt".format(x)
-            file_path = os.path.join(dir_path,'chemo_config',file_name)
-            text_file = open(file_path,"w")
-            text_file.write("0,0,0\n")
-            text_file.write("0,0,0\n")
-            text_file.close()
+                file_name =  "vial{0}_gr.txt".format(x) # make growth rate file
+                file_path = os.path.join(dir_path,'growthrate',file_name)
+                text_file = open(file_path,"w")
+                text_file.write("Experiment: {0} vial {1}, {2}\n".format(custom_script.EXP_NAME, x, time.strftime("%c")))
+                text_file.write("0,0\n") #initialize to 0
+                text_file.close()
 
+            if custom_script.OPERATION_MODE == 'chemostat':
+                file_name =  "vial{0}_chemoconfig.txt".format(x) #make chemostat file
+                file_path = os.path.join(dir_path,'chemo_config',file_name)
+                text_file = open(file_path,"w")
+                text_file.write("0,0,0\n") #header
+                text_file.write("0,0,0\n") #initialize to 0
+                text_file.close()
+
+        stir_rate(custom_script.STIR_INITIAL)
         OD_read = None
         temp_read = None
         print('Getting initial values from eVOLVER...')
         while OD_read is None and temp_read is None:
-            OD_read, temp_read  = read_data(vials, exp_name)
+            OD_read, temp_read  = read_data(vials)
             exp_blank = input('Calibrate vials to blank? (y/n): ')
             if exp_blank == 'y':
-                OD_initial = OD_read
+                OD_initial = OD_read # take an OD measurement, subtract OD_initial from all future measurements, note that this is not stored in data files
             else:
-                OD_initial = np.zeros(len(vials))
+                OD_initial = np.zeros(len(vials)) # just use zeros, may lead to offsets in data if vial/medai is slightly diff, but can correct in post-processing unless needed for feedback
 
-    else:
-        pickle_name =  "{0}.pickle".format(exp_name)
-        pickle_path = os.path.join(save_path,exp_name,pickle_name)
+    else: #load existing experiment
+        pickle_name =  "{0}.pickle".format(custom_script.EXP_NAME)
+        pickle_path = os.path.join(save_path,custom_script.EXP_NAME,pickle_name)
         with open(pickle_path, 'rb') as f:
             loaded_var  = pickle.load(f)
         x = loaded_var
@@ -300,6 +356,9 @@ def initialize_exp(exp_name, vials, evolver_ip, evolver_port):
         # Restart chemostat pumps
         current_chemo = [0] * 16
 
+    # copy current custom script to txt file
+    backup_filename = '{0}_{1}.txt'.format(custom_script.EXP_NAME,(time.strftime('%y%m%d_%H%M')))
+    shutil.copy('custom_script.py',os.path.join(save_path,custom_script.EXP_NAME,backup_filename))
     return start_time, OD_initial
 
 def stop_all_pumps():
@@ -307,10 +366,11 @@ def stop_all_pumps():
     dpu_evolver_ns.emit('command', command, namespace='/dpu-evolver')
     print('All Pumps Stopped!')
 
-def save_var(exp_name, start_time, OD_initial):
+def save_var(start_time, OD_initial):
+    # save variables needed for restarting experiment later
     save_path = os.path.dirname(os.path.realpath(__file__))
-    pickle_name =  "{0}.pickle".format(exp_name)
-    pickle_path = os.path.join(save_path,exp_name,pickle_name)
+    pickle_name =  "{0}.pickle".format(custom_script.EXP_NAME)
+    pickle_path = os.path.join(save_path,custom_script.EXP_NAME,pickle_name)
     with open(pickle_path, 'wb') as f:
         pickle.dump([start_time, OD_initial], f)
 
