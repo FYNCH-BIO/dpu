@@ -7,8 +7,6 @@ import argparse
 import eVOLVER_module
 import custom_script
 
-
-
 logger = logging.getLogger('main')
 
 def get_options():
@@ -86,7 +84,8 @@ def custom_functions(elapsed_time):
 if __name__ == '__main__':
     options = get_options()
 
-    print('\x1B]0;eVOLVER EXPERIMENT : PRESS Ctrl-C TO PAUSE\x07') #changes terminal tab title in OSX
+    #changes terminal tab title in OSX
+    print('\x1B]0;eVOLVER EXPERIMENT: PRESS Ctrl-C TO PAUSE\x07')
     # logging setup
     if options.quiet:
         logging.basicConfig(level=logging.CRITICAL + 10)
