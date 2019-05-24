@@ -120,6 +120,7 @@ if __name__ == '__main__':
                     key = input('Experiment paused. Press enter key to restart '
                                 ' or hit Ctrl-C again to terminate experiment')
                     logger.warning('resuming experiment')
+                    start_exp()
                     break
             except KeyboardInterrupt:
                 print('Second Ctrl-C detected, shutting down')
@@ -135,3 +136,7 @@ if __name__ == '__main__':
             print('Experiment stopped, goodbye!')
             logger.warning('experiment stopped, goodbye!')
             break
+
+    # stop experiment one last time
+    # covers corner case where user presses Ctrl-C twice quickly
+    stop_exp()
