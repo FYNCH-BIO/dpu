@@ -51,7 +51,7 @@ def update_eVOLVER():
     # read and record OD
     elapsed_time = round((time.time() - start_time)/3600,4)
     logger.debug('elapsed time: %.4f hours' % elapsed_time)
-    print("Time: {0} Hours".format(elapsed_time))
+    print("{0}: {1} Hours".format(custom_script.EXP_NAME ,elapsed_time))
     OD_data, temp_data = eVOLVER_module.read_data(vials)
     if OD_data is not None and temp_data is not None:
         if OD_data == 'empty':
@@ -84,6 +84,8 @@ def custom_functions(elapsed_time):
 if __name__ == '__main__':
     options = get_options()
 
+    #changes terminal tab title in OSX
+    print('\x1B]0;eVOLVER EXPERIMENT: PRESS Ctrl-C TO PAUSE\x07')
     # logging setup
     if options.quiet:
         logging.basicConfig(level=logging.CRITICAL + 10)
@@ -115,7 +117,7 @@ if __name__ == '__main__':
                 logger.warning('interrupt received, pausing experiment')
                 stop_exp()
                 while True:
-                    key = input('Experiment paused. Press any key to restart '
+                    key = input('Experiment paused. Press enter key to restart '
                                 ' or hit Ctrl-C again to terminate experiment')
                     logger.warning('resuming experiment')
                     break
