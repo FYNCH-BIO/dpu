@@ -173,7 +173,7 @@ def fluid_command(MESSAGE, vial, elapsed_time, pump_wait, exp_name, time_on,
         text_file = open(file_path,"a+")
         text_file.write("{0},{1}\n".format(elapsed_time, time_on))
         text_file.close()
-
+        
 def update_chemo(vials, bolus_in_s):
     global current_chemo
 
