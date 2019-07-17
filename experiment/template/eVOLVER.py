@@ -77,6 +77,10 @@ class EvolverNamespace(BaseNamespace):
                         VIALS, 'OD')
         self.save_data(data['transformed']['temp'], elapsed_time,
                         VIALS, 'temp')
+        self.save_data(data['od_90'], elapsed_time,
+                        VIALS, 'OD90_raw')
+        self.save_data(data['od_135'], elapsed_time,
+                        VIALS, 'OD135_raw')   
         # run custom functions
         self.custom_functions(data, VIALS, elapsed_time)
         # save variables
@@ -309,6 +313,8 @@ class EvolverNamespace(BaseNamespace):
 
             logger.debug('creating data directories')
             os.makedirs(os.path.join(EXP_DIR, 'OD'))
+            os.makedirs(os.path.join(EXP_DIR, 'OD90_raw'))
+            os.makedirs(os.path.join(EXP_DIR, 'OD135_raw'))
             os.makedirs(os.path.join(EXP_DIR, 'temp'))
             os.makedirs(os.path.join(EXP_DIR, 'temp_config'))
             os.makedirs(os.path.join(EXP_DIR, 'pump_log'))
@@ -321,6 +327,8 @@ class EvolverNamespace(BaseNamespace):
                                                            time.strftime("%c"))
                 # make OD file
                 self._create_file(x, 'OD', defaults=[exp_str])
+                self._create_file(x, 'OD90_raw', defaults=[exp_str])
+                self._create_file(x, 'OD135_raw', defaults=[exp_str])
                 # make temperature data file
                 self._create_file(x, 'temp')
                 # make temperature configuration file
