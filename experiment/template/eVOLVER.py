@@ -77,10 +77,10 @@ class EvolverNamespace(BaseNamespace):
                         VIALS, 'OD')
         self.save_data(data['transformed']['temp'], elapsed_time,
                         VIALS, 'temp')
-        self.save_data(data['od_90'], elapsed_time,
+        self.save_data(data['data'].get('od_90', []), elapsed_time,
                         VIALS, 'OD90_raw')
-        self.save_data(data['od_135'], elapsed_time,
-                        VIALS, 'OD135_raw')   
+        self.save_data(data['data'].get('od_135', []), elapsed_time,
+                        VIALS, 'OD135_raw')
         # run custom functions
         self.custom_functions(data, VIALS, elapsed_time)
         # save variables
@@ -134,7 +134,7 @@ class EvolverNamespace(BaseNamespace):
 
         temps = []
         for x in vials:
-            file_name =  "vial{0}_tempconfig.txt".format(x)
+            file_name =  "vial{0}_temp_config.txt".format(x)
             file_path = os.path.join(EXP_DIR, 'temp_config', file_name)
             temp_set_data = np.genfromtxt(file_path, delimiter=',')
             temp_set = temp_set_data[len(temp_set_data)-1][1]
@@ -332,7 +332,7 @@ class EvolverNamespace(BaseNamespace):
                 # make temperature data file
                 self._create_file(x, 'temp')
                 # make temperature configuration file
-                self._create_file(x, 'tempconfig',
+                self._create_file(x, 'temp_config',
                                   defaults=[exp_str,
                                             "0,{0}".format(TEMP_INITIAL[x])])
                 # make pump log file
@@ -349,7 +349,7 @@ class EvolverNamespace(BaseNamespace):
                                             "0,0"],
                                   directory='growthrate')
                 # make chemostat file
-                self._create_file(x, 'chemoconfig',
+                self._create_file(x, 'chemo_config',
                                   defaults=["0,0,0",
                                             "0,0,0"],
                                   directory='chemo_config')
@@ -406,6 +406,8 @@ class EvolverNamespace(BaseNamespace):
         return result
 
     def save_data(self, data, elapsed_time, vials, parameter):
+        if len(data) == 0:
+            return
         for x in vials:
             file_name =  "vial{0}_{1}.txt".format(x, parameter)
             file_path = os.path.join(EXP_DIR, parameter, file_name)

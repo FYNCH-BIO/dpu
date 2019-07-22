@@ -207,7 +207,7 @@ def chemostat(eVOLVER, input_data, vials, elapsed_time):
             average_OD = float(np.median(od_values_from_file))
 
             # set chemostat config path and pull current state from file
-            file_name =  "vial{0}_chemoconfig.txt".format(x)
+            file_name =  "vial{0}_chemo_config.txt".format(x)
             chemoconfig_path = os.path.join(save_path, EXP_NAME,
                                             'chemo_config', file_name)
             chemo_config = np.genfromtxt(chemoconfig_path, delimiter=',')
