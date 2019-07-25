@@ -551,12 +551,15 @@ if __name__ == '__main__':
                 print('Ctrl-C detected, pausing experiment')
                 logger.warning('interrupt received, pausing experiment')
                 EVOLVER_NS.stop_exp()
+                # stop receiving broadcasts
+                socketIO.disconnect()
                 while True:
                     key = input('Experiment paused. Press enter key to restart '
                                 ' or hit Ctrl-C again to terminate experiment')
                     logger.warning('resuming experiment')
                     # no need to have something like "restart_chemo" here
                     # with the new server logic
+                    socketIO.connect()
                     break
             except KeyboardInterrupt:
                 print('Second Ctrl-C detected, shutting down')
@@ -576,4 +579,5 @@ if __name__ == '__main__':
 
     # stop experiment one last time
     # covers corner case where user presses Ctrl-C twice quickly
+    socketIO.connect()
     EVOLVER_NS.stop_exp()
