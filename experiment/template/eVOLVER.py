@@ -542,10 +542,20 @@ if __name__ == '__main__':
                             filename=options.log_name,
                             level=level)
 
+    reset_connection_timer = time.time()
     while True:
         try:
             # infinite loop
-            socketIO.wait()
+            socketIO.wait(seconds=0.1)
+            if time.time() - reset_connection_timer > 3600:
+                # reset connection to avoid buildup of broadcast
+                # messages (unlikely but could happen for very long
+                # experiments with slow dpu code/computer)
+                logger.info('resetting connection to eVOLVER to avoid '
+                            'potential buildup of broadcast messages')
+                socketIO.disconnect()
+                socketIO.connect()
+                reset_connection_timer = time.time()
         except KeyboardInterrupt:
             try:
                 print('Ctrl-C detected, pausing experiment')
