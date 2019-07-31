@@ -542,21 +542,34 @@ if __name__ == '__main__':
                             filename=options.log_name,
                             level=level)
 
+    reset_connection_timer = time.time()
     while True:
         try:
             # infinite loop
-            socketIO.wait()
+            socketIO.wait(seconds=0.1)
+            if time.time() - reset_connection_timer > 3600:
+                # reset connection to avoid buildup of broadcast
+                # messages (unlikely but could happen for very long
+                # experiments with slow dpu code/computer)
+                logger.info('resetting connection to eVOLVER to avoid '
+                            'potential buildup of broadcast messages')
+                socketIO.disconnect()
+                socketIO.connect()
+                reset_connection_timer = time.time()
         except KeyboardInterrupt:
             try:
                 print('Ctrl-C detected, pausing experiment')
                 logger.warning('interrupt received, pausing experiment')
                 EVOLVER_NS.stop_exp()
+                # stop receiving broadcasts
+                socketIO.disconnect()
                 while True:
                     key = input('Experiment paused. Press enter key to restart '
                                 ' or hit Ctrl-C again to terminate experiment')
                     logger.warning('resuming experiment')
                     # no need to have something like "restart_chemo" here
                     # with the new server logic
+                    socketIO.connect()
                     break
             except KeyboardInterrupt:
                 print('Second Ctrl-C detected, shutting down')
@@ -576,4 +589,5 @@ if __name__ == '__main__':
 
     # stop experiment one last time
     # covers corner case where user presses Ctrl-C twice quickly
+    socketIO.connect()
     EVOLVER_NS.stop_exp()
