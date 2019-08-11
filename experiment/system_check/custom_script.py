@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 ##### USER DEFINED GENERAL SETTINGS #####
 
 #set new name for each experiment, otherwise files will be overwritten
-EXP_NAME = 'test_expt'
+EXP_NAME = 'system_check'
 EVOLVER_IP = '192.168.1.40'
 EVOLVER_PORT = 8081
 
@@ -40,7 +40,7 @@ STIR_INITIAL = [0] * 16 #try 8,10,12 etc; makes 16-value list
 #STIR_INITIAL = [7,7,7,7,8,8,8,8,9,9,9,9,10,10,10,10]
 
 VOLUME =  25 #mL, determined by vial cap straw length
-OD_POWER = 2125 #must match value used for OD calibration
+OD_POWER = 4095 #must match value used for OD calibration
 PUMP_CAL_FILE = 'pump_cal.txt' #tab delimited, mL/s with 16 influx pumps on first row, etc.
 OPERATION_MODE = 'custom_function' #use to choose between 'turbidostat' and 'chemostat' functions
 # if using a different mode, name your function as the OPERATION_MODE variable
@@ -177,6 +177,8 @@ def custom_function(eVOLVER, input_data, vials, elapsed_time):
 
         average_OD90_milk = [0] * 16
         average_OD135_milk = [0] * 16
+        delta_OD90 = [0] * 16
+        delta_OD135 = [0] * 16
 
         for x in vials:
             file_name =  "vial{0}_OD90_raw.txt".format(x)
@@ -190,18 +192,23 @@ def custom_function(eVOLVER, input_data, vials, elapsed_time):
             for n in range(1,values_averaged):
                 od_values_from_file.append(OD90_data[len(OD90_data)-n][1])
             average_OD90_milk[x] = float(np.mean(od_values_from_file))
+            delta_OD90[x] = average_OD90_milk[x] - average_OD90_water[x]
 
             OD135_data = np.genfromtxt(OD135_path, delimiter=',')
             od_values_from_file = []
             for n in range(1,values_averaged):
                 od_values_from_file.append(OD135_data[len(OD135_data)-n][1])
             average_OD135_milk[x] = float(np.mean(od_values_from_file))
+            delta_OD135[x] = average_OD135_milk[x] - average_OD135_water[x]
 
         print(average_OD90_water)
         print(average_OD90_milk)
 
         print(average_OD135_water)
         print(average_OD135_milk)
+
+        for x in vials:
+            print('Vial {0}   OD90:{1}   OD135:{2}'.format(x,delta_OD90[x],delta_OD135[x]))
 
         print('Starting Temperature Diagnostics...')
         measured_temp = input("Current actual room temperature (C)?: ")
@@ -242,7 +249,7 @@ def custom_function(eVOLVER, input_data, vials, elapsed_time):
 
 
         print('Waiting 30 minutes for temperature to equilibriate...')
-        for n in range(5): # 90 cycles
+        for n in range(90): # 90 cycles
             eVOLVER.grab_data(20)
 
         high_temp = [0] * 16
@@ -287,26 +294,36 @@ def custom_function(eVOLVER, input_data, vials, elapsed_time):
 
         now = datetime.now()
 
-        for x in vials:
-            vial_data = [vp_serial,
-                        ss_serial,
-                        fb_serial,
-                        in1,
-                        eff,
-                        in2,                        
-                        x,
-                        'OK',
-                        average_OD90_water[x],
-                        average_OD90_milk[x],
-                        average_OD135_water[x],
-                        average_OD135_milk[x],
-                        measured_temp,
-                        room_temp[x],
-                        high_temp[x],
-                        signed_by,
-                        now.strftime("%m/%d/%Y, %H:%M:%S")]
+        log_data_prompt = input('Want to log the data on Google Sheets?: (y/n)')
 
-            sheet.insert_row(vial_data, starting_entry)
+        if log_data_prompt == 'y':
+            print('Data logging....')
+            for x in vials:
+                vial_data = [vp_serial,
+                            ss_serial,
+                            fb_serial,
+                            in1,
+                            eff,
+                            in2,
+                            x,
+                            'OK',
+                            OD_POWER,
+                            average_OD90_water[x],
+                            average_OD90_milk[x],
+                            delta_OD90[x],
+                            average_OD135_water[x],
+                            average_OD135_milk[x],
+                            delta_OD135[x],
+                            measured_temp,
+                            room_temp[x],
+                            high_temp[x],
+                            signed_by,
+                            now.strftime("%Y_%m_%d__%H_%M_%S")]
+
+                sheet.insert_row(vial_data, starting_entry)
+                print('Data logged.')
+        else:
+            print('Data not logged!')
 
         print('Returning Temperature back to Room Temp')
         eVOLVER.update_temperature([2500]*16, True)
