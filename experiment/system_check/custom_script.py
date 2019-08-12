@@ -10,14 +10,6 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 save_path = os.path.dirname(os.path.realpath(__file__)) #save path
 
-# use creds to create a client to interact with the Google Drive API
-scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
-creds = ServiceAccountCredentials.from_json_keyfile_name('evolver-quality-control-f5ec138ddaad.json', scope)
-client = gspread.authorize(creds)
-
-sheet = client.open("eVOLVER Quality Control").worksheet('Sys Check')
-
-list_of_registered = sheet.get_all_records()
 
 # logger setup
 logger = logging.getLogger(__name__)
@@ -268,6 +260,8 @@ def custom_function(eVOLVER, input_data, vials, elapsed_time):
 
         print('Temperature recorded!')
 
+        print('Returning Temperature back to Room Temp')
+        eVOLVER.update_temperature([2500]*16, True)
 
         print(room_temp)
         print(high_temp)
@@ -289,14 +283,24 @@ def custom_function(eVOLVER, input_data, vials, elapsed_time):
         else:
             in2 = 'N/A'
 
-        list_of_registered = sheet.get_all_records()
-        starting_entry = len(list_of_registered)+2
 
         now = datetime.now()
 
-        log_data_prompt = input('Want to log the data on Google Sheets?: (y/n)')
+        log_data_prompt = input('Want to log the data on Google Sheets? WARNING: Must have the appropriate hash file to access: (y/n)')
 
         if log_data_prompt == 'y':
+            # use creds to create a client to interact with the Google Drive API
+            scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
+            creds = ServiceAccountCredentials.from_json_keyfile_name('evolver-quality-control-f5ec138ddaad.json', scope)
+            client = gspread.authorize(creds)
+
+            sheet = client.open("eVOLVER Quality Control").worksheet('Sys Check')
+
+            list_of_registered = sheet.get_all_records()
+
+            list_of_registered = sheet.get_all_records()
+            starting_entry = len(list_of_registered)+2
+
             print('Data logging....')
             for x in vials:
                 vial_data = [vp_serial,
@@ -324,9 +328,6 @@ def custom_function(eVOLVER, input_data, vials, elapsed_time):
                 print('Data logged.')
         else:
             print('Data not logged!')
-
-        print('Returning Temperature back to Room Temp')
-        eVOLVER.update_temperature([2500]*16, True)
 
         exit()
 
