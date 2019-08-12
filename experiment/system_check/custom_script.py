@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 #set new name for each experiment, otherwise files will be overwritten
 EXP_NAME = 'system_check'
-EVOLVER_IP = '192.168.1.40'
+EVOLVER_IP = input('What is the IP address of the eVOLVER? (look on touchscreen): ')
 EVOLVER_PORT = 8081
 
 ##### Identify pump calibration files, define initial values for temperature, stirring, volume, power settings
