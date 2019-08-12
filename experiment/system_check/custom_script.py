@@ -286,7 +286,9 @@ def custom_function(eVOLVER, input_data, vials, elapsed_time):
 
         now = datetime.now()
 
-        log_data_prompt = input('Want to log the data on Google Sheets? WARNING: Must have the appropriate hash file to access: (y/n)')
+        log_data_prompt = input('Want to log the data on Google Sheets? WARNING: Must have the appropriate hash file to access: (y/n) ')
+        if log_data_prompt != 'y':
+            log_data_prompt = input('Are you sure? Enter (y/n) again to verify (y = log, n =  skip)')
 
         if log_data_prompt == 'y':
             # use creds to create a client to interact with the Google Drive API
@@ -325,7 +327,8 @@ def custom_function(eVOLVER, input_data, vials, elapsed_time):
                             now.strftime("%Y_%m_%d__%H_%M_%S")]
 
                 sheet.insert_row(vial_data, starting_entry)
-                print('Data logged.')
+
+                print('Vial {0} Data logged.'.format(x))
         else:
             print('Data not logged!')
 
