@@ -107,10 +107,10 @@ def linear(x, a, b):
     y = np.array(x)*a + b
     return y
 
-def three_dim(data, c0,c1,c2,c3,c4,c5,c6,c7,c8,c9):
+def three_dim(data, c0,c1,c2,c3,c4,c5):
     x = data[0]
     y = data[1]
-    return c0 + c1*x + c2*y + c3*x**2 + c4*x*y + c5*y**2 + c6*x**3 + c7*(x**2)*y + c8*x*(y**2) + c9*(y**3)
+    return c0 + c1*x + c2*y + c3*x**2 + c4*x*y + c5*y**2
 
 def fit(x, y):
     #Fits the data to a sigmoid and returns the parameters
@@ -161,7 +161,9 @@ def calibrate_od(calibration_data, graph_name, param, graph = False):
 def calibrate3d_od(calibration_data, graph_name, graph= False):
     global input_data
 
-    initial_parameters = [1.0, 1.0, 1.0,1.0,1.0,1.0, 1.0, 1.0,1.0,1.0]
+    initial_parameters = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+
+    paramlist = []
 
     if graph:
         fig1 = plt.figure()
@@ -191,10 +193,12 @@ def calibrate3d_od(calibration_data, graph_name, graph= False):
         print('R-squared:', Rsquared)
         print('fitted prameters', fitted_parameters)
 
+        paramlist.append(fitted_parameters.tolist())
+
     if graph:
         plt.show()
 
-    return fitted_parameters
+    return paramlist
 
 def calibrate_temp(calibration_data, graph_name, graph = False):
     paramlist = []
@@ -312,7 +316,7 @@ if __name__ == '__main__':
         parameters = calibrate3d_od(raw_calibration, cal_file, graph = True)
         update_cal = input('Update eVOLVER with calibration? (y/n): ')
         if update_cal == 'y':
-            dpu_evolver_ns.emit('setcalibrationod', {'parameters':parameters, 'filename': cal_file, 'caltype': 'multidim'}, namespace='/dpu-evolver')
+            dpu_evolver_ns.emit('setcalibrationod', {'parameters':parameters, 'filename': cal_file, 'caltype': 'multidim_quad'}, namespace='/dpu-evolver')
     if cal_file is not None and temp_cal:
         parameters = calibrate_temp(raw_calibration, cal_file, graph = True)
         update_cal = input('Update eVOLVER with calibration? (y/n): ')
