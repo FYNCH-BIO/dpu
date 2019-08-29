@@ -26,7 +26,6 @@ STIR_INITIAL = [8] * 16 #try 8,10,12 etc; makes 16-value list
 #STIR_INITIAL = [7,7,7,7,8,8,8,8,9,9,9,9,10,10,10,10]
 
 VOLUME =  25 #mL, determined by vial cap straw length
-OD_POWER = 2125 #must match value used for OD calibration
 PUMP_CAL_FILE = 'pump_cal.txt' #tab delimited, mL/s with 16 influx pumps on first row, etc.
 OPERATION_MODE = 'turbidostat' #use to choose between 'turbidostat' and 'chemostat' functions
 # if using a different mode, name your function as the OPERATION_MODE variable
@@ -34,7 +33,7 @@ OPERATION_MODE = 'turbidostat' #use to choose between 'turbidostat' and 'chemost
 ##### END OF USER DEFINED GENERAL SETTINGS #####
 
 def turbidostat(eVOLVER, input_data, vials, elapsed_time):
-    OD_data = input_data['transformed']['od_90']
+    OD_data = input_data['transformed']['od']
 
     ##### USER DEFINED VARIABLES #####
 
