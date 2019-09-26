@@ -132,6 +132,7 @@ class EvolverNamespace(BaseNamespace):
                   {}, namespace = '/dpu-evolver')
 
     def transform_data(self, data, vials, od_cal, temp_cal):
+        od_data_2 = None
         if od_cal['type'] == THREE_DIMENSION:
             od_data_2 = data['data'].get(od_cal['params'][1], None)
 
