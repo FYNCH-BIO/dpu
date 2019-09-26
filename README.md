@@ -88,7 +88,7 @@ For Windows, use py instead of python3.6 for all commands.
 ### Calibrate Temperature
 
 ```sh
-python3.6 calibration/calibrate.py -a <ip_address> -n <file_name> -t linear -f temperature -p temp
+python3.6 calibration/calibrate.py -a <ip_address> -n <file_name> -t linear -f <name_after_fit> -p temp
 ```
 
 ### List raw OD JSON files logged on evolver 
