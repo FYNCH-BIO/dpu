@@ -8,11 +8,13 @@ import shutil
 import logging
 import argparse
 import numpy as np
+import json
+import traceback
 from scipy import stats
 from socketIO_client import SocketIO, BaseNamespace
 
 import custom_script
-from custom_script import EXP_NAME, OD_POWER, PUMP_CAL_FILE
+from custom_script import EXP_NAME, PUMP_CAL_FILE
 from custom_script import EVOLVER_IP, EVOLVER_PORT, OPERATION_MODE
 from custom_script import STIR_INITIAL, TEMP_INITIAL
 
@@ -23,6 +25,12 @@ VIALS = [x for x in range(16)]
 
 SAVE_PATH = os.path.dirname(os.path.realpath(__file__))
 EXP_DIR = os.path.join(SAVE_PATH, EXP_NAME)
+OD_CAL_PATH = os.path.join(SAVE_PATH, 'od_cal.json')
+TEMP_CAL_PATH = os.path.join(SAVE_PATH, 'temp_cal.json')
+
+SIGMOID = 'sigmoid'
+LINEAR = 'linear'
+THREE_DIMENSION = '3d'
 
 logger = logging.getLogger('eVOLVER')
 
@@ -56,9 +64,14 @@ class EvolverNamespace(BaseNamespace):
                            'functions')
             return
 
+        with open(OD_CAL_PATH) as f:
+            od_cal = json.load(f)
+        with open(TEMP_CAL_PATH) as f:
+            temp_cal = json.load(f)
+
         # apply calibrations
         # update temperatures if needed
-        data = self.transform_data(data, VIALS)
+        data = self.transform_data(data, VIALS, od_cal, temp_cal)
         if data is None:
             logger.error('could not tranform raw data, skipping user-'
                          'defined functions')
@@ -67,56 +80,64 @@ class EvolverNamespace(BaseNamespace):
         # should we "blank" the OD?
         if self.use_blank and self.OD_initial is None:
             logger.info('setting initial OD reading')
-            self.OD_initial = data['transformed']['od_90']
+            self.OD_initial = data['transformed']['od']
         elif self.OD_initial is None:
             self.OD_initial = np.zeros(len(VIALS))
-        data['transformed']['od_90'] = (data['transformed']['od_90'] -
+        data['transformed']['od'] = (data['transformed']['od'] -
                                         self.OD_initial)
         # save data
-        self.save_data(data['transformed']['od_90'], elapsed_time,
+        self.save_data(data['transformed']['od'], elapsed_time,
                         VIALS, 'OD')
         self.save_data(data['transformed']['temp'], elapsed_time,
                         VIALS, 'temp')
-        self.save_data(data['data'].get('od_90', []), elapsed_time,
-                        VIALS, 'OD90_raw')
-        self.save_data(data['data'].get('od_135', []), elapsed_time,
-                        VIALS, 'OD135_raw')
+
+        for param in od_cal['params']:
+            self.save_data(data['data'].get(param, []), elapsed_time,
+                        VIALS, param + '_raw')
+        for param in temp_cal['params']:
+            self.save_data(data['data'].get(param, []), elapsed_time,
+                        VIALS, param + '_raw')
         # run custom functions
         self.custom_functions(data, VIALS, elapsed_time)
         # save variables
         self.save_variables(self.start_time, self.OD_initial)
 
-    def on_calibrationod(self, data):
-        file_path = os.path.join(EXP_DIR, 'od_cal.txt')
-        with open(file_path, 'w') as f:
-            f.write(data)
-        logger.debug("OD calibration: %s" % data)
+    def on_activecalibrations(self, data):
+        print('Calibrations recieved')
+        for calibration in data:
+            if calibration['calibrationType'] == 'od':
+                file_path = OD_CAL_PATH
+            elif calibration['calibrationType'] == 'temperature':
+                file_path = TEMP_CAL_PATH
+            else:
+                continue
+            for fit in calibration['fits']:
+                if fit['active']:
+                    with open(file_path, 'w') as f:
+                        json.dump(fit, f)
+                    # Create raw data directories and files for params needed
+                    for param in fit['params']:
+                        if not os.path.isdir(os.path.join(EXP_DIR, param + '_raw')):
+                            os.makedirs(os.path.join(EXP_DIR, param + '_raw'))
+                            for x in range(len(fit['coefficients'])):
+                                exp_str = "Experiment: {0} vial {1}, {2}".format(EXP_NAME,
+                                        x,
+                                        time.strftime("%c"))
+                                self._create_file(x, param + '_raw', defaults=[exp_str])
+                    break
 
-    def on_calibrationtemp(self, data):
-        file_path = os.path.join(EXP_DIR, 'temp_calibration.txt')
-        with open(file_path , 'w') as f:
-            f.write(data)
-        logger.debug("temperature calibration: %s" % data)
-
-    def request_od_calibration(self):
-        logger.debug('requesting OD calibrations')
-        self.emit('getcalibrationod',
+    def request_calibrations(self):
+        logger.debug('requesting active calibrations')
+        self.emit('getactivecal',
                   {}, namespace = '/dpu-evolver')
 
-    def request_temp_calibration(self):
-        logger.debug('requesting temperature calibrations')
-        self.emit('getcalibrationtemp',
-                  {}, namespace = '/dpu-evolver')
+    def transform_data(self, data, vials, od_cal, temp_cal):
+        od_data_2 = None
+        if od_cal['type'] == THREE_DIMENSION:
+            od_data_2 = data['data'].get(od_cal['params'][1], None)
 
-    def transform_data(self, data, vials):
-        odcal_path = os.path.join(EXP_DIR, 'od_cal.txt')
-        od_cal = np.genfromtxt(odcal_path, delimiter=',')
-
-        tempcal_path = os.path.join(EXP_DIR, 'temp_calibration.txt')
-        temp_cal = np.genfromtxt(tempcal_path, delimiter=',')
-
-        od_data = data['data'].get('od_90', None)
-        temp_data = data['data'].get('temp', None)
+        od_data = data['data'].get(od_cal['params'][0], None)
+        temp_data = data['data'].get(temp_cal['params'][0], None)
         set_temp_data = data['config'].get('temp', {}).get('value', None)
 
         if od_data is None or temp_data is None or set_temp_data is None:
@@ -129,6 +150,8 @@ class EvolverNamespace(BaseNamespace):
             return None
 
         od_data = np.array([float(x) for x in od_data])
+        if od_data_2:
+            od_data_2 = np.array([float(x) for x in od_data_2])
         temp_data = np.array([float(x) for x in temp_data])
         set_temp_data = np.array([float(x) for x in set_temp_data])
 
@@ -139,22 +162,31 @@ class EvolverNamespace(BaseNamespace):
             temp_set_data = np.genfromtxt(file_path, delimiter=',')
             temp_set = temp_set_data[len(temp_set_data)-1][1]
             temps.append(temp_set)
+            od_coefficients = od_cal['coefficients'][x]
+            temp_coefficients = temp_cal['coefficients'][x]
             try:
-                if (od_cal.shape[0] == 4):
+                if od_cal['type'] == SIGMOID:
                     #convert raw photodiode data into ODdata using calibration curve
-                    od_data[x] = np.real(od_cal[2,x] -
-                                        ((np.log10((od_cal[1,x] -
-                                                    od_cal[0,x]) /
+                    od_data[x] = np.real(od_coefficients[2] -
+                                        ((np.log10((od_coefficients[1] -
+                                                    od_coefficients[0]) /
                                                     (float(od_data[x]) -
-                                                    od_cal[0,x])-1)) /
-                                                    od_cal[3,x]))
+                                                    od_coefficients[0])-1)) /
+                                                    od_coefficients[3]))
                     if not np.isfinite(od_data[x]):
                         od_data[x] = 'NaN'
                         logger.debug('OD from vial %d: %s' % (x, od_data[x]))
                     else:
                         logger.debug('OD from vial %d: %.3f' % (x, od_data[x]))
+                elif od_cal['type'] == THREE_DIMENSION:
+                    od_data[x] = np.real(od_coefficients[0] +
+                                        (od_coefficients[1]*od_data[x]) +
+                                        (od_coefficients[2]*od_data_2[x]) +
+                                        (od_coefficients[3]*(od_data[x]**2)) +
+                                        (od_coefficients[4]*od_data[x]*od_data_2[x]) +
+                                        (od_coefficients[5]*(od_data_2[x]**2)))
                 else:
-                    logger.error('OD calibration not formatted correctly')
+                    logger.error('OD calibration not of supported type!')
                     od_data[x] = 'NaN'
             except ValueError:
                 print("OD Read Error")
@@ -162,7 +194,7 @@ class EvolverNamespace(BaseNamespace):
                 od_data[x] = 'NaN'
             try:
                 temp_data[x] = (float(temp_data[x]) *
-                                temp_cal[0][x]) + temp_cal[1][x]
+                                temp_coefficients[0]) + temp_coefficients[1]
                 logger.debug('temperature from vial %d: %.3f' % (x, temp_data[x]))
             except ValueError:
                 print("Temp Read Error")
@@ -171,7 +203,7 @@ class EvolverNamespace(BaseNamespace):
                 temp_data[x]  = 'NaN'
             try:
                 set_temp_data[x] = (float(set_temp_data[x]) *
-                                    temp_cal[0][x]) + temp_cal[1][x]
+                                    temp_coefficients[0]) + temp_coefficients[1]
                 logger.debug('set_temperature from vial %d: %.3f' % (x,
                                                                 set_temp_data[x]))
             except ValueError:
@@ -187,8 +219,9 @@ class EvolverNamespace(BaseNamespace):
         if delta_t > 0.2:
             logger.info('updating temperatures (max. deltaT is %.2f)' %
                         delta_t)
-            raw_temperatures = [str(int((temps[x] - temp_cal[1][x]) /
-                                        temp_cal[0][x]))
+            coefficients = temp_cal['coefficients']
+            raw_temperatures = [str(int((temps[x] - temp_cal['coefficients'][x][1]) /
+                                        temp_cal['coefficients'][x][0]))
                                 for x in vials]
             self.update_temperature(raw_temperatures)
         else:
@@ -203,7 +236,7 @@ class EvolverNamespace(BaseNamespace):
 
         # add a new field in the data dictionary
         data['transformed'] = {}
-        data['transformed']['od_90'] = od_data
+        data['transformed']['od'] = od_data
         data['transformed']['temp'] = temp_data
         return data
 
@@ -308,13 +341,10 @@ class EvolverNamespace(BaseNamespace):
 
             start_time = time.time()
 
-            self.request_od_calibration()
-            self.request_temp_calibration()
+            self.request_calibrations()
 
             logger.debug('creating data directories')
             os.makedirs(os.path.join(EXP_DIR, 'OD'))
-            os.makedirs(os.path.join(EXP_DIR, 'OD90_raw'))
-            os.makedirs(os.path.join(EXP_DIR, 'OD135_raw'))
             os.makedirs(os.path.join(EXP_DIR, 'temp'))
             os.makedirs(os.path.join(EXP_DIR, 'temp_config'))
             os.makedirs(os.path.join(EXP_DIR, 'pump_log'))
@@ -327,8 +357,6 @@ class EvolverNamespace(BaseNamespace):
                                                            time.strftime("%c"))
                 # make OD file
                 self._create_file(x, 'OD', defaults=[exp_str])
-                self._create_file(x, 'OD90_raw', defaults=[exp_str])
-                self._create_file(x, 'OD135_raw', defaults=[exp_str])
                 # make temperature data file
                 self._create_file(x, 'temp')
                 # make temperature configuration file
@@ -390,18 +418,10 @@ class EvolverNamespace(BaseNamespace):
 
     def check_for_calibrations(self):
         result = True
-        odcal_path = os.path.join(EXP_DIR, 'od_cal.txt')
-        tempcal_path = os.path.join(EXP_DIR, 'temp_calibration.txt')
-        if not os.path.exists(odcal_path):
+        if not os.path.exists(OD_CAL_PATH) or not os.path.exists(TEMP_CAL_PATH):
             # log and request again
-            logger.warning('OD calibrations not received yet, requesting again')
-            self.request_od_calibration()
-            result = False
-        if not os.path.exists(tempcal_path):
-            # log and request again
-            logger.warning('temperature calibrations not received yet, '
-                        'requesting again')
-            self.request_temp_calibration()
+            logger.warning('Calibrations not received yet, requesting again')
+            self.request_calibrations()
             result = False
         return result
 
@@ -582,6 +602,7 @@ if __name__ == '__main__':
         except Exception as e:
             logger.critical('exception %s stopped the experiment' % str(e))
             print('error "%s" stopped the experiment' % str(e))
+            traceback.print_exc(file=sys.stdout)
             EVOLVER_NS.stop_exp()
             print('Experiment stopped, goodbye!')
             logger.warning('experiment stopped, goodbye!')
