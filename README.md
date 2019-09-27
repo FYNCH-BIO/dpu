@@ -76,52 +76,36 @@ py setup.py install
 
 ## Run calibration code (after the raw values have been logged on the eVOLVER)
 
-### List raw temperature JSON files logged on evolver 
+### List raw calibration files on eVOLVER 
 
 #### Mac
 ```sh
-python3.6 calibration/calibrate.py -t -a 192.168.1.2 -g
+python3.6 calibration/calibrate.py -a <ip_address> -g
 ```
 
-#### Windows
-```sh
-py calibration/calibrate.py -t -a 192.168.1.2 -g
-```
+For Windows, use py instead of python3.6 for all commands.
 
-### Choose temperature raw data file to update calibration with
+### Calibrate Temperature
 
-#### Mac
 ```sh
-python3.6 calibration/calibrate.py -t -a 192.168.1.2 -f 'Temp-2019-03-19 06:20:58.json'
-```
-#### Windows
-```sh
-py calibration/calibrate.py -t -a 192.168.1.2 -f 'Temp-2019-03-19 06:20:58.json'
+python3.6 calibration/calibrate.py -a <ip_address> -n <file_name> -t linear -f <name_after_fit> -p temp
 ```
 
 ### List raw OD JSON files logged on evolver 
 
-#### Mac
+#### OD135
 ```sh
-python3.6 calibration/calibrate.py -o -a 192.168.1.2 -g 
+python3.6 calibration/calibrate.py -a <ip_address> -n <file_name> -t sigmoid -f <name_after_fit> -p od_135
 ```
 
-#### Windows
+#### OD90 (Check to ensure mode is configured properly)
 ```sh
-py calibration/calibrate.py -o -a 192.168.1.2 -g 
+python3.6 calibration/calibrate.py -a <ip_address> -n <file_name> -t sigmoid -f <name_after_fit> -p od_90
 ```
 
-### Choose OD raw data file to update calibration with (3D, necessary for algal growth module)
-
+#### 3D FIT (Check to ensure mode is configured properly)
 ```sh
-python3.6 calibration/calibrate.py -o -a 192.168.1.2 -f <filename> 
+python3.6 calibration/calibrate.py -a <ip_address> -n <file_name> -t 3d -f <name_after_fit> -p od_90,od_135
 ```
-
-#### Windows
-
-```sh
-py calibration/calibrate.py -o -a 192.168.1.2 -f <filename> 
-```
-
 
 
