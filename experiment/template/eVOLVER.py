@@ -240,15 +240,15 @@ class EvolverNamespace(BaseNamespace):
         data['transformed']['temp'] = temp_data
         return data
 
-    def update_stir_rate(self, stir_rates):
+    def update_stir_rate(self, stir_rates, immediate = False):
         data = {'param': 'stir', 'value': stir_rates,
-                'immediate': False, 'recurring': True}
+                'immediate': immediate, 'recurring': True}
         logger.debug('stir rate command: %s' % data)
         self.emit('command', data, namespace = '/dpu-evolver')
 
-    def update_temperature(self, temperatures):
+    def update_temperature(self, temperatures, immediate = False):
         data = {'param': 'temp', 'value': temperatures,
-                'immediate': False, 'recurring': True}
+                'immediate': immediate, 'recurring': True}
         logger.debug('temperature command: %s' % data)
         self.emit('command', data, namespace = '/dpu-evolver')
 
@@ -258,13 +258,13 @@ class EvolverNamespace(BaseNamespace):
                    'recurring': False ,'immediate': True}
         self.emit('command', command, namespace='/dpu-evolver')
 
-    def update_chemo(self, data, vials, bolus_in_s, period_config):
+    def update_chemo(self, data, vials, bolus_in_s, period_config, immediate = False):
         current_pump = data['config']['pump']['value']
 
         MESSAGE = {'fields_expected_incoming': 49,
                    'fields_expected_outgoing': 49,
                    'recurring': True,
-                   'immediate': False,
+                   'immediate': immediate,
                    'value': ['--'] * 48,
                    'param': 'pump'}
 
