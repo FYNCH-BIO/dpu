@@ -32,14 +32,20 @@ SIGMOID = 'sigmoid'
 LINEAR = 'linear'
 THREE_DIMENSION = '3d'
 
+RETRY_LIMIT = 3
+
 logger = logging.getLogger('eVOLVER')
 
 EVOLVER_NS = None
 
 class EvolverNamespace(BaseNamespace):
-    start_time = None
-    use_blank = False
-    OD_initial = None
+    def __init__(self):
+        super().__init__()
+        self.commands = []
+        self.retry_count = 0
+        self.start_time = None
+        self.use_blank = False
+        self.OD_initial = None
 
     def on_connect(self, *args):
         print("Connected to eVOLVER as client")
@@ -97,6 +103,10 @@ class EvolverNamespace(BaseNamespace):
         for param in temp_cal['params']:
             self.save_data(data['data'].get(param, []), elapsed_time,
                         VIALS, param + '_raw')
+
+        # Clear old commands
+        self.commands = []
+        self.retry_count = []
         # run custom functions
         self.custom_functions(data, VIALS, elapsed_time)
         # save variables
@@ -125,6 +135,13 @@ class EvolverNamespace(BaseNamespace):
                                         time.strftime("%c"))
                                 self._create_file(x, param + '_raw', defaults=[exp_str])
                     break
+
+    def on_serialexception(self, data):
+        logger.error('Failed command!')
+        logger.error(data)
+        if data in self.commands and self.retry_count <= RETRY_LIMIT:
+            self.emit('command', data, namespace = '/dpu-evolver')
+            self.retry_count += 1
 
     def request_calibrations(self):
         logger.debug('requesting active calibrations')
@@ -244,18 +261,21 @@ class EvolverNamespace(BaseNamespace):
         data = {'param': 'stir', 'value': stir_rates,
                 'immediate': immediate, 'recurring': True}
         logger.debug('stir rate command: %s' % data)
+        self.commands.append(data)
         self.emit('command', data, namespace = '/dpu-evolver')
 
     def update_temperature(self, temperatures, immediate = False):
         data = {'param': 'temp', 'value': temperatures,
                 'immediate': immediate, 'recurring': True}
         logger.debug('temperature command: %s' % data)
+        self.commands.append(data)
         self.emit('command', data, namespace = '/dpu-evolver')
 
     def fluid_command(self, MESSAGE):
         logger.debug('fluid command: %s' % MESSAGE)
         command = {'param': 'pump', 'value': MESSAGE,
                    'recurring': False ,'immediate': True}
+        self.commands.append(data)
         self.emit('command', command, namespace='/dpu-evolver')
 
     def update_chemo(self, data, vials, bolus_in_s, period_config, immediate = False):
@@ -284,6 +304,7 @@ class EvolverNamespace(BaseNamespace):
 
         if MESSAGE['value'] != current_pump:
             logger.info('updating chemostat: %s' % MESSAGE)
+            self.commands.append(MESSAGE)
             self.emit('command', MESSAGE, namespace = '/dpu-evolver')
 
     def stop_all_pumps(self, ):
@@ -292,6 +313,7 @@ class EvolverNamespace(BaseNamespace):
                 'recurring': False,
                 'immediate': True}
         logger.info('stopping all pumps')
+        self.commands.append(data)
         self.emit('command', data, namespace = '/dpu-evolver')
 
     def _create_file(self, vial, param, directory=None, defaults=None):
@@ -339,7 +361,7 @@ class EvolverNamespace(BaseNamespace):
                     logger.warning('not deleting existing data directory, exiting')
                     sys.exit(1)
 
-            start_time = time.time()
+            self.start_time = time.time()
 
             self.request_calibrations()
 
@@ -403,7 +425,7 @@ class EvolverNamespace(BaseNamespace):
             with open(pickle_path, 'rb') as f:
                 loaded_var  = pickle.load(f)
             x = loaded_var
-            start_time = x[0]
+            self.start_time = x[0]
             self.OD_initial = x[1]
 
         # copy current custom script to txt file
@@ -413,8 +435,6 @@ class EvolverNamespace(BaseNamespace):
                                                     backup_filename))
         logger.info('saved a copy of current custom_script.py as %s' %
                     backup_filename)
-
-        return start_time
 
     def check_for_calibrations(self):
         result = True
@@ -545,8 +565,7 @@ if __name__ == '__main__':
     # start by stopping any existing chemostat
     EVOLVER_NS.stop_all_pumps()
     #
-    EVOLVER_NS.start_time = EVOLVER_NS.initialize_exp(VIALS,
-                                                      options.always_yes)
+    EVOLVER_NS.initialize_exp(VIALS, options.always_yes)
 
     # logging setup
     if options.quiet:
