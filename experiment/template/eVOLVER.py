@@ -13,20 +13,18 @@ import traceback
 from scipy import stats
 from socketIO_client import SocketIO, BaseNamespace
 
+
 import custom_script
-from custom_script import EXP_NAME, PUMP_CAL_FILE
-from custom_script import EVOLVER_IP, EVOLVER_PORT, OPERATION_MODE
-from custom_script import STIR_INITIAL, TEMP_INITIAL
+from custom_script import PUMP_CAL_FILE
+from custom_script import OPERATION_MODE
+
+import nbstreamreader
+from nbstreamreader import NonBlockingStreamReader as NBSR
 
 # Should not be changed
 # vials to be considered/excluded should be handled
 # inside the custom functions
 VIALS = [x for x in range(16)]
-
-SAVE_PATH = os.path.dirname(os.path.realpath(__file__))
-EXP_DIR = os.path.join(SAVE_PATH, EXP_NAME)
-OD_CAL_PATH = os.path.join(SAVE_PATH, 'od_cal.json')
-TEMP_CAL_PATH = os.path.join(SAVE_PATH, 'temp_cal.json')
 
 SIGMOID = 'sigmoid'
 LINEAR = 'linear'
@@ -37,6 +35,20 @@ logger = logging.getLogger('eVOLVER')
 EVOLVER_NS = None
 
 class EvolverNamespace(BaseNamespace):
+    #important file/directory paths
+    savePath = None
+    expDirectory = None
+    OD_Cal_Path = None
+    Temp_Cal_Path = None
+
+    expName = None
+    expContinue = None
+    expInitial = None
+    expOverwrite = None
+    expZero = None
+    expBlank = None
+    expAlwaysYes = None
+
     start_time = None
     use_blank = False
     OD_initial = None
@@ -54,19 +66,20 @@ class EvolverNamespace(BaseNamespace):
         logger.info("reconnected to eVOLVER as client")
 
     def on_broadcast(self, data):
+        print("Broadcast received",flush=True)
         logger.debug('broadcast received')
         elapsed_time = round((time.time() - self.start_time) / 3600, 4)
         logger.debug('elapsed time: %.4f hours' % elapsed_time)
-        print("{0}: {1} Hours".format(EXP_NAME, elapsed_time))
+        #print("{0}: {1} Hours".format(expName, elapsed_time))
         # are the calibrations in yet?
         if not self.check_for_calibrations():
             logger.warning('calibration files still missing, skipping custom '
                            'functions')
             return
 
-        with open(OD_CAL_PATH) as f:
+        with open(self.OD_Cal_Path) as f:
             od_cal = json.load(f)
-        with open(TEMP_CAL_PATH) as f:
+        with open(self.Temp_Cal_Path) as f:
             temp_cal = json.load(f)
 
         # apply calibrations
@@ -102,13 +115,17 @@ class EvolverNamespace(BaseNamespace):
         # save variables
         self.save_variables(self.start_time, self.OD_initial)
 
+        # error functionality features
+        # media spill
+
+
     def on_activecalibrations(self, data):
         print('Calibrations recieved')
         for calibration in data:
             if calibration['calibrationType'] == 'od':
-                file_path = OD_CAL_PATH
+                file_path = self.OD_Cal_Path
             elif calibration['calibrationType'] == 'temperature':
-                file_path = TEMP_CAL_PATH
+                file_path = self.Temp_Cal_Path
             else:
                 continue
             for fit in calibration['fits']:
@@ -117,10 +134,10 @@ class EvolverNamespace(BaseNamespace):
                         json.dump(fit, f)
                     # Create raw data directories and files for params needed
                     for param in fit['params']:
-                        if not os.path.isdir(os.path.join(EXP_DIR, param + '_raw')):
-                            os.makedirs(os.path.join(EXP_DIR, param + '_raw'))
+                        if not os.path.isdir(os.path.join(self.expDirectory, param + '_raw')):
+                            os.makedirs(os.path.join(self.expDirectory, param + '_raw'))
                             for x in range(len(fit['coefficients'])):
-                                exp_str = "Experiment: {0} vial {1}, {2}".format(EXP_NAME,
+                                exp_str = "Experiment: {0} vial {1}, {2}".format(self.expName,
                                         x,
                                         time.strftime("%c"))
                                 self._create_file(x, param + '_raw', defaults=[exp_str])
@@ -158,7 +175,7 @@ class EvolverNamespace(BaseNamespace):
         temps = []
         for x in vials:
             file_name =  "vial{0}_temp_config.txt".format(x)
-            file_path = os.path.join(EXP_DIR, 'temp_config', file_name)
+            file_path = os.path.join(self.expDirectory, 'temp_config', file_name)
             temp_set_data = np.genfromtxt(file_path, delimiter=',')
             temp_set = temp_set_data[len(temp_set_data)-1][1]
             temps.append(temp_set)
@@ -300,59 +317,47 @@ class EvolverNamespace(BaseNamespace):
         if directory is None:
             directory = param
         file_name =  "vial{0}_{1}.txt".format(vial, param)
-        file_path = os.path.join(EXP_DIR, directory, file_name)
+        file_path = os.path.join(self.expDirectory, directory, file_name)
         text_file = open(file_path, "w")
         for default in defaults:
             text_file.write(default + '\n')
         text_file.close()
 
-    def initialize_exp(self, vials, always_yes=False):
+    def initialize_exp(self, vials):
         logger.debug('initializing experiment')
 
-        if os.path.exists(EXP_DIR):
+        #check to see if there is already an existing experiment
+        if os.path.exists(self.expDirectory):
             logger.info('found an existing experiment')
-            exp_continue = None
-            if always_yes:
-                exp_continue = 'y'
-            else:
-                while exp_continue not in ['y', 'n']:
-                    exp_continue = input('Continue from existing experiment? (y/n): ')
-        else:
-            exp_continue = 'n'
+            if self.expAlwaysYes:
+                self.expContinue = 'y'
 
-        if exp_continue == 'n':
-            if os.path.exists(EXP_DIR):
-                exp_overwrite = None
-                if always_yes:
-                    exp_overwrite = 'y'
-                else:
-                    while exp_overwrite not in ['y', 'n']:
-                        exp_overwrite = input('Directory aleady exists. '
-                                            'Overwrite with new experiment? (y/n): ')
+        if self.expContinue == 'n':
+            if os.path.exists(self.expDirectory):
+                if self.expAlwaysYes:
+                    self.expOverwrite = 'y'
                 logger.info('data directory already exists')
-                if exp_overwrite == 'y':
+                if self.expOverwrite == 'y':
                     logger.info('deleting existing data directory')
-                    shutil.rmtree(EXP_DIR)
+                    #shutil.rmtree(self.expDirectory)
                 else:
                     print('Change experiment name in custom_script.py '
                         'and then restart...')
                     logger.warning('not deleting existing data directory, exiting')
                     sys.exit(1)
-
             start_time = time.time()
-
             self.request_calibrations()
 
             logger.debug('creating data directories')
-            os.makedirs(os.path.join(EXP_DIR, 'OD'))
-            os.makedirs(os.path.join(EXP_DIR, 'temp'))
-            os.makedirs(os.path.join(EXP_DIR, 'temp_config'))
-            os.makedirs(os.path.join(EXP_DIR, 'pump_log'))
-            os.makedirs(os.path.join(EXP_DIR, 'ODset'))
-            os.makedirs(os.path.join(EXP_DIR, 'growthrate'))
-            os.makedirs(os.path.join(EXP_DIR, 'chemo_config'))
+            os.makedirs(os.path.join(self.expDirectory, 'OD'))
+            os.makedirs(os.path.join(self.expDirectory, 'temp'))
+            os.makedirs(os.path.join(self.expDirectory, 'temp_config'))
+            os.makedirs(os.path.join(self.expDirectory, 'pump_log'))
+            os.makedirs(os.path.join(self.expDirectory, 'ODset'))
+            os.makedirs(os.path.join(self.expDirectory, 'growthrate'))
+            os.makedirs(os.path.join(self.expDirectory, 'chemo_config'))
             for x in vials:
-                exp_str = "Experiment: {0} vial {1}, {2}".format(EXP_NAME,
+                exp_str = "Experiment: {0} vial {1}, {2}".format(self.expName,
                                                                  x,
                                                            time.strftime("%c"))
                 # make OD file
@@ -362,7 +367,7 @@ class EvolverNamespace(BaseNamespace):
                 # make temperature configuration file
                 self._create_file(x, 'temp_config',
                                   defaults=[exp_str,
-                                            "0,{0}".format(TEMP_INITIAL[x])])
+                                            "0,{0}".format(self.expInitial['temp_input'][x])])
                 # make pump log file
                 self._create_file(x, 'pump_log',
                                   defaults=[exp_str,
@@ -381,14 +386,12 @@ class EvolverNamespace(BaseNamespace):
                                   defaults=["0,0,0",
                                             "0,0,0"],
                                   directory='chemo_config')
-
-            self.update_stir_rate(STIR_INITIAL)
-
-            if always_yes:
-                exp_blank = 'y'
-            else:
-                exp_blank = input('Calibrate vials to blank? (y/n): ')
-            if exp_blank == 'y':
+            self.update_stir_rate(self.expInitial['stir_input'])
+            if self.expAlwaysYes:
+                self.expBlank = 'y'
+            #else:
+                #expBlank = input('Calibrate vials to blank? (y/n): ')
+            if self.expBlank == 'y':
                 # will do it with first broadcast
                 self.use_blank = True
                 logger.info('will use initial OD measurement as blank')
@@ -397,28 +400,27 @@ class EvolverNamespace(BaseNamespace):
                 self.OD_initial = np.zeros(len(vials))
         else:
             # load existing experiment
-            pickle_name =  "{0}.pickle".format(EXP_NAME)
-            pickle_path = os.path.join(EXP_DIR, pickle_name)
+            pickle_name =  "{0}.pickle".format(self.expName)
+            pickle_path = os.path.join(self.expDirectory, pickle_name)
             logger.info('loading previous experiment data: %s' % pickle_path)
             with open(pickle_path, 'rb') as f:
                 loaded_var  = pickle.load(f)
             x = loaded_var
             start_time = x[0]
             self.OD_initial = x[1]
-
         # copy current custom script to txt file
-        backup_filename = '{0}_{1}.txt'.format(EXP_NAME,
+        backup_filename = '{0}_{1}.txt'.format(self.expName,
                                             time.strftime('%y%m%d_%H%M'))
-        shutil.copy('custom_script.py', os.path.join(EXP_DIR,
+        shutil.copy('/Users/evolver/Library/Application Support/Electron/legacy/data/ezira_test/custom_script.py', os.path.join(self.expDirectory,
                                                     backup_filename))
         logger.info('saved a copy of current custom_script.py as %s' %
                     backup_filename)
-
+        print('End',flush=True)
         return start_time
 
     def check_for_calibrations(self):
         result = True
-        if not os.path.exists(OD_CAL_PATH) or not os.path.exists(TEMP_CAL_PATH):
+        if not os.path.exists(self.OD_Cal_Path) or not os.path.exists(self.Temp_Cal_Path):
             # log and request again
             logger.warning('Calibrations not received yet, requesting again')
             self.request_calibrations()
@@ -430,7 +432,7 @@ class EvolverNamespace(BaseNamespace):
             return
         for x in vials:
             file_name =  "vial{0}_{1}.txt".format(x, parameter)
-            file_path = os.path.join(EXP_DIR, parameter, file_name)
+            file_path = os.path.join(self.expDirectory, parameter, file_name)
             text_file = open(file_path, "a+")
             text_file.write("{0},{1}\n".format(elapsed_time, data[x]))
             text_file.close()
@@ -438,14 +440,14 @@ class EvolverNamespace(BaseNamespace):
     def save_variables(self, start_time, OD_initial):
         # save variables needed for restarting experiment later
         save_path = os.path.dirname(os.path.realpath(__file__))
-        pickle_name = "{0}.pickle".format(EXP_NAME)
-        pickle_path = os.path.join(EXP_DIR, pickle_name)
+        pickle_name = "{0}.pickle".format(self.expName)
+        pickle_path = os.path.join(self.expDirectory, pickle_name)
         logger.debug('saving all variables: %s' % pickle_path)
         with open(pickle_path, 'wb') as f:
             pickle.dump([start_time, OD_initial], f)
 
     def get_flow_rate(self):
-        file_path = os.path.join(SAVE_PATH, PUMP_CAL_FILE)
+        file_path = os.path.join(self.savePath, PUMP_CAL_FILE)
         flow_calibration = np.loadtxt(file_path, delimiter="\t")
         if len(flow_calibration) == 16:
             flow_rate = flow_calibration
@@ -457,7 +459,7 @@ class EvolverNamespace(BaseNamespace):
     def calc_growth_rate(self, vial, gr_start, elapsed_time):
         ODfile_name =  "vial{0}_OD.txt".format(vial)
         # Grab Data and make setpoint
-        OD_path = os.path.join(EXP_DIR, 'OD', ODfile_name)
+        OD_path = os.path.join(self.expDirectory, 'OD', ODfile_name)
         OD_data = np.genfromtxt(OD_path, delimiter=',')
         raw_time = OD_data[:, 0]
         raw_OD = OD_data[:, 1]
@@ -477,15 +479,16 @@ class EvolverNamespace(BaseNamespace):
 
         # Save slope to file
         file_name =  "vial{0}_gr.txt".format(vial)
-        gr_path = os.path.join(EXP_DIR, 'growthrate', file_name)
+        gr_path = os.path.join(self.expDirectory, 'growthrate', file_name)
         text_file = open(gr_path, "a+")
         text_file.write("{0},{1}\n".format(elapsed_time, slope))
         text_file.close()
 
     def custom_functions(self, data, vials, elapsed_time):
+        print('In custom',flush=True)
         # load user script from custom_script.py
         if OPERATION_MODE == 'turbidostat':
-            custom_script.turbidostat(self, data, vials, elapsed_time)
+            custom_script.turbidostat(self, data, vials, elapsed_time,self.expInitial['lower_thresh'],self.expInitial['upper_thresh'],self.expInitial['volume'])
         elif OPERATION_MODE == 'chemostat':
             custom_script.chemostat(self, data, vials, elapsed_time)
         else:
@@ -505,20 +508,25 @@ class EvolverNamespace(BaseNamespace):
     def stop_exp(self):
         self.stop_all_pumps()
 
-def get_options():
-    description = 'Run an eVOLVER experiment from the command line'
-    parser = argparse.ArgumentParser(description=description)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-z","--zero")
+    parser.add_argument("-c","--continues")
+    parser.add_argument("-o","--overwrite")
+    parser.add_argument("-p","--parameters")
+    parser.add_argument("-i","--evolverIP")
+    parser.add_argument("-t","--evolverPort")
+    parser.add_argument("-n","--name")
+    parser.add_argument("-b","--blank")
 
-    parser.add_argument('--always-yes', action='store_true',
+    parser.add_argument('--always_yes', action='store_true',
                         default=False,
                         help='Answer yes to all questions '
-                             '(i.e. continues from existing experiment, '
-                             'overwrites existing data and blanks OD '
-                             'measurements)')
-    parser.add_argument('--log-name',
-                        default=os.path.join(EXP_DIR, 'evolver.log'),
+                            '(i.e. continues from existing experiment, '
+                            'overwrites existing data and blanks OD '
+                            'measurements)')
+    parser.add_argument('--log_name',
                         help='Log file name directory (default: %(default)s)')
-
     log_nolog = parser.add_mutually_exclusive_group()
     log_nolog.add_argument('--verbose', action='count',
                            default=0,
@@ -527,88 +535,82 @@ def get_options():
     log_nolog.add_argument('--quiet', action='store_true',
                            default=False,
                            help='Disable logging to file entirely')
+    args = parser.parse_args()
+    print(args,flush=True)
 
-    return parser.parse_args()
-
-if __name__ == '__main__':
-    options = get_options()
+    #assign variables values
+    evolverIP = args.evolverIP
+    evolverPort = args.evolverPort
 
     #changes terminal tab title in OSX
-    print('\x1B]0;eVOLVER EXPERIMENT: PRESS Ctrl-C TO PAUSE\x07')
+    print('\x1B]0;eVOLVER EXPERIMENT: PRESS Ctrl-C TO PAUSE\x07',flush=True)
 
     # silence logging until experiment is initialized
-    logging.level = logging.CRITICAL + 10
+    #logging.level = logging.CRITICAL + 10
 
-    socketIO = SocketIO(EVOLVER_IP, EVOLVER_PORT)
+    socketIO = SocketIO(evolverIP, evolverPort)
     EVOLVER_NS = socketIO.define(EvolverNamespace, '/dpu-evolver')
+
+    #store user input information from application
+    EVOLVER_NS.expName = args.name
+    EVOLVER_NS.expContinue = args.continues
+    EVOLVER_NS.expInitial = json.loads(args.parameters)
+    EVOLVER_NS.expOverwrite = args.overwrite
+    EVOLVER_NS.expZero = args.zero
+    EVOLVER_NS.expBlank = args.blank
+    EVOLVER_NS.expAlwaysYes = args.always_yes
+
+    EVOLVER_NS.savePath = os.path.dirname(os.path.realpath(__file__))
+    EVOLVER_NS.expDirectory = EVOLVER_NS.savePath
+    EVOLVER_NS.OD_Cal_Path = os.path.join(EVOLVER_NS.savePath, 'od_cal.json')
+    EVOLVER_NS.Temp_Cal_Path = os.path.join(EVOLVER_NS.savePath, 'temp_cal.json')
 
     # start by stopping any existing chemostat
     EVOLVER_NS.stop_all_pumps()
-    #
-    EVOLVER_NS.start_time = EVOLVER_NS.initialize_exp(VIALS,
-                                                      options.always_yes)
-
+    EVOLVER_NS.start_time = EVOLVER_NS.initialize_exp(VIALS)
     # logging setup
-    if options.quiet:
+    if args.log_name:
+        log_name = args.log_name
+    else:
+        log_name = os.path.join(EVOLVER_NS.expDirectory, 'evolver.log')
+
+    if args.quiet:
         logging.basicConfig(level=logging.CRITICAL + 10)
     else:
-        if options.verbose == 0:
+        if args.verbose == 0:
             level = logging.INFO
-        elif options.verbose >= 1:
+        elif args.verbose >= 1:
             level = logging.DEBUG
         logging.basicConfig(format='%(asctime)s - %(name)s - [%(levelname)s] '
                             '- %(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S',
-                            filename=options.log_name,
+                            filename=log_name,
                             level=level)
 
     reset_connection_timer = time.time()
-    while True:
-        try:
-            # infinite loop
-            socketIO.wait(seconds=0.1)
-            if time.time() - reset_connection_timer > 3600:
-                # reset connection to avoid buildup of broadcast
-                # messages (unlikely but could happen for very long
-                # experiments with slow dpu code/computer)
-                logger.info('resetting connection to eVOLVER to avoid '
-                            'potential buildup of broadcast messages')
-                socketIO.disconnect()
-                socketIO.connect()
-                reset_connection_timer = time.time()
-        except KeyboardInterrupt:
-            try:
-                print('Ctrl-C detected, pausing experiment')
-                logger.warning('interrupt received, pausing experiment')
-                EVOLVER_NS.stop_exp()
-                # stop receiving broadcasts
-                socketIO.disconnect()
-                while True:
-                    key = input('Experiment paused. Press enter key to restart '
-                                ' or hit Ctrl-C again to terminate experiment')
-                    logger.warning('resuming experiment')
-                    # no need to have something like "restart_chemo" here
-                    # with the new server logic
-                    socketIO.connect()
-                    break
-            except KeyboardInterrupt:
-                print('Second Ctrl-C detected, shutting down')
-                logger.warning('second interrupt received, terminating '
-                                'experiment')
-                EVOLVER_NS.stop_exp()
-                print('Experiment stopped, goodbye!')
-                logger.warning('experiment stopped, goodbye!')
-                break
-        except Exception as e:
-            logger.critical('exception %s stopped the experiment' % str(e))
-            print('error "%s" stopped the experiment' % str(e))
-            traceback.print_exc(file=sys.stdout)
-            EVOLVER_NS.stop_exp()
-            print('Experiment stopped, goodbye!')
-            logger.warning('experiment stopped, goodbye!')
-            break
 
-    # stop experiment one last time
-    # covers corner case where user presses Ctrl-C twice quickly
-    socketIO.connect()
-    EVOLVER_NS.stop_exp()
+    #instanitate NonBlockingStreamReader to read user input values from electron app
+    nbsr = NBSR(sys.stdin)
+    while True:
+        time.sleep(2)
+        socketIO.wait(seconds=0.1)
+        if time.time() - reset_connection_timer > 3600:
+            # reset connection to avoid buildup of broadcast
+            # messages (unlikely but could happen for very long
+            # experiments with slow dpu code/computer)
+            logger.info('resetting connection to eVOLVER to avoid '
+                        'potential buildup of broadcast messages')
+            socketIO.disconnect()
+            socketIO.connect()
+            reset_connection_timer = time.time()
+        # infinite loop
+        message = nbsr.readline()
+        if 'pause-script' in message:
+            print('Pausing expt', flush=True)
+            logger.warning('interrupt received, pausing experiment')
+            EVOLVER_NS.stop_exp()
+            socketIO.disconnect()
+        if 'continue-script' in message:
+            print('Restarting expt', flush=True)
+            logger.warning('resuming experiment')
+            socketIO.connect()
