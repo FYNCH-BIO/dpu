@@ -53,16 +53,18 @@ class EvolverNamespace(BaseNamespace):
     use_blank = False
     OD_initial = None
 
+    pause = False
+
     def on_connect(self, *args):
-        print("Connected to eVOLVER as client")
+        #print("Connected to eVOLVER as client")
         logger.info('connected to eVOLVER as client')
 
     def on_disconnect(self, *args):
-        print("Disconected from eVOLVER as client")
+        #print("Disconected from eVOLVER as client")
         logger.info('disconnected to eVOLVER as client')
 
     def on_reconnect(self, *args):
-        print("Reconnected to eVOLVER as client")
+        #print("Reconnected to eVOLVER as client")
         logger.info("reconnected to eVOLVER as client")
 
     def on_broadcast(self, data):
@@ -70,7 +72,6 @@ class EvolverNamespace(BaseNamespace):
         logger.debug('broadcast received')
         elapsed_time = round((time.time() - self.start_time) / 3600, 4)
         logger.debug('elapsed time: %.4f hours' % elapsed_time)
-        #print("{0}: {1} Hours".format(expName, elapsed_time))
         # are the calibrations in yet?
         if not self.check_for_calibrations():
             logger.warning('calibration files still missing, skipping custom '
@@ -99,17 +100,19 @@ class EvolverNamespace(BaseNamespace):
         data['transformed']['od'] = (data['transformed']['od'] -
                                         self.OD_initial)
         # save data
-        self.save_data(data['transformed']['od'], elapsed_time,
-                        VIALS, 'OD')
-        self.save_data(data['transformed']['temp'], elapsed_time,
-                        VIALS, 'temp')
+        if self.pause == False:
+            self.save_data(data['transformed']['od'], elapsed_time,
+                            VIALS, 'OD')
+            self.save_data(data['transformed']['temp'], elapsed_time,
+                            VIALS, 'temp')
 
-        for param in od_cal['params']:
-            self.save_data(data['data'].get(param, []), elapsed_time,
-                        VIALS, param + '_raw')
-        for param in temp_cal['params']:
-            self.save_data(data['data'].get(param, []), elapsed_time,
-                        VIALS, param + '_raw')
+            for param in od_cal['params']:
+                self.save_data(data['data'].get(param, []), elapsed_time,
+                            VIALS, param + '_raw')
+            for param in temp_cal['params']:
+                self.save_data(data['data'].get(param, []), elapsed_time,
+                            VIALS, param + '_raw')
+
         # run custom functions
         self.custom_functions(data, VIALS, elapsed_time)
         # save variables
@@ -120,7 +123,7 @@ class EvolverNamespace(BaseNamespace):
 
 
     def on_activecalibrations(self, data):
-        print('Calibrations recieved')
+        #print('Calibrations recieved',flush=True)
         for calibration in data:
             if calibration['calibrationType'] == 'od':
                 file_path = self.OD_Cal_Path
@@ -158,11 +161,11 @@ class EvolverNamespace(BaseNamespace):
         set_temp_data = data['config'].get('temp', {}).get('value', None)
 
         if od_data is None or temp_data is None or set_temp_data is None:
-            print('Incomplete data recieved, Error with measurement')
+            #print('Incomplete data recieved, Error with measurement')
             logger.error('Incomplete data received, error with measurements')
             return None
         if 'NaN' in od_data or 'NaN' in temp_data or 'NaN' in set_temp_data:
-            print('NaN recieved, Error with measurement')
+            #print('NaN recieved, Error with measurement')
             logger.error('NaN received, error with measurements')
             return None
 
@@ -206,7 +209,7 @@ class EvolverNamespace(BaseNamespace):
                     logger.error('OD calibration not of supported type!')
                     od_data[x] = 'NaN'
             except ValueError:
-                print("OD Read Error")
+                #print("OD Read Error")
                 logger.error('OD read error for vial %d, setting to NaN' % x)
                 od_data[x] = 'NaN'
             try:
@@ -214,7 +217,7 @@ class EvolverNamespace(BaseNamespace):
                                 temp_coefficients[0]) + temp_coefficients[1]
                 logger.debug('temperature from vial %d: %.3f' % (x, temp_data[x]))
             except ValueError:
-                print("Temp Read Error")
+                #print("Temp Read Error")
                 logger.error('temperature read error for vial %d, setting to NaN'
                             % x)
                 temp_data[x]  = 'NaN'
@@ -224,7 +227,7 @@ class EvolverNamespace(BaseNamespace):
                 logger.debug('set_temperature from vial %d: %.3f' % (x,
                                                                 set_temp_data[x]))
             except ValueError:
-                print("Set Temp Read Error")
+                #print("Set Temp Read Error")
                 logger.error('set temperature read error for vial %d, setting to NaN'
                             % x)
                 set_temp_data[x]  = 'NaN'
@@ -341,8 +344,8 @@ class EvolverNamespace(BaseNamespace):
                     logger.info('deleting existing data directory')
                     #shutil.rmtree(self.expDirectory)
                 else:
-                    print('Change experiment name in custom_script.py '
-                        'and then restart...')
+                    #print('Change experiment name in custom_script.py '
+                        #'and then restart...')
                     logger.warning('not deleting existing data directory, exiting')
                     sys.exit(1)
             start_time = time.time()
@@ -411,11 +414,11 @@ class EvolverNamespace(BaseNamespace):
         # copy current custom script to txt file
         backup_filename = '{0}_{1}.txt'.format(self.expName,
                                             time.strftime('%y%m%d_%H%M'))
-        shutil.copy('/Users/evolver/Library/Application Support/Electron/legacy/data/ezira_test/custom_script.py', os.path.join(self.expDirectory,
+        shutil.copy('/Users/ezirayimerwolle/Library/Application Support/Electron/legacy/data/ezira_test/custom_script.py', os.path.join(self.expDirectory,
                                                     backup_filename))
         logger.info('saved a copy of current custom_script.py as %s' %
                     backup_filename)
-        print('End',flush=True)
+        #print('End',flush=True)
         return start_time
 
     def check_for_calibrations(self):
@@ -438,6 +441,7 @@ class EvolverNamespace(BaseNamespace):
             text_file.close()
 
     def save_variables(self, start_time, OD_initial):
+        print("Saving variables",flush=True)
         # save variables needed for restarting experiment later
         save_path = os.path.dirname(os.path.realpath(__file__))
         pickle_name = "{0}.pickle".format(self.expName)
@@ -501,9 +505,9 @@ class EvolverNamespace(BaseNamespace):
             except AttributeError:
                 logger.error('could not find function %s in custom_script.py' %
                             OPERATION_MODE)
-                print('Could not find function %s in custom_script.py '
-                    '- Skipping user defined functions'%
-                    OPERATION_MODE)
+                #print('Could not find function %s in custom_script.py '
+                    #'- Skipping user defined functions'%
+                    #OPERATION_MODE)
 
     def stop_exp(self):
         self.stop_all_pumps()
@@ -536,14 +540,13 @@ if __name__ == '__main__':
                            default=False,
                            help='Disable logging to file entirely')
     args = parser.parse_args()
-    print(args,flush=True)
 
     #assign variables values
     evolverIP = args.evolverIP
     evolverPort = args.evolverPort
 
     #changes terminal tab title in OSX
-    print('\x1B]0;eVOLVER EXPERIMENT: PRESS Ctrl-C TO PAUSE\x07',flush=True)
+    #print('\x1B]0;eVOLVER EXPERIMENT: PRESS Ctrl-C TO PAUSE\x07',flush=True)
 
     # silence logging until experiment is initialized
     #logging.level = logging.CRITICAL + 10
@@ -610,7 +613,9 @@ if __name__ == '__main__':
             logger.warning('interrupt received, pausing experiment')
             EVOLVER_NS.stop_exp()
             socketIO.disconnect()
+            EVOLVER_NS.pause = True
         if 'continue-script' in message:
             print('Restarting expt', flush=True)
             logger.warning('resuming experiment')
             socketIO.connect()
+            EVOLVER_NS.pause = False

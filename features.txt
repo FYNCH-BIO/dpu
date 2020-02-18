@@ -1,0 +1,36 @@
+spill_detection
+- detect spills by tracking for temperature and OD anomalies
+  - either only temperature, only OD or combination, or both
+  - temperature is a constant parameter (unlike OD)
+- what detection method?
+  - peak detection via signal processing
+  - moving z-score
+  - calculating large rate of changes (derivatives)
+
+pause_stop
+- user should pause be able to pause or stop eVOLVER during experiment
+- pause state
+  - stop all pumps
+  - cease recording data
+  - notify user in data logs times where pauses were initiated and when experiment resumed
+  - disconnect from socketIO
+- stop state
+  - close pyShell to terminate process
+  - kill process (if pyShell doesnt already)
+- app close
+  - treat as stop state --> not ideal because user should directly determine if an experiment is ended
+    - stop/kill experiment
+  - keep process running *
+- handle potential running experiments when app closes & reopens --> might be possible but difficult to implement due to different mechanisms related to communicating with processes across platforms
+  - reconnect application with running process via pipe or other mechanism 
+
+- export data files
+  - file selection
+    - send all output files
+    - send only raw and transformed data files
+    - give user ability to select individual files
+  - file exportation mechanism
+    - via email
+      - need to get user email address; can include in custom_script and input from UI
+      - take into consideration file sizes??
+      - look into packages that includes built in tools
