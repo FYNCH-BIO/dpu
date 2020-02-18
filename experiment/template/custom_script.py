@@ -243,6 +243,8 @@ def chemostat(eVOLVER, input_data, vials, elapsed_time):
     # end of chemostat() fxn
 
 # def your_function_here(): # good spot to define modular functions for dynamics or feedback
+def media_spill():
+    pass
 
 if __name__ == '__main__':
     print('Please run eVOLVER.py instead')
