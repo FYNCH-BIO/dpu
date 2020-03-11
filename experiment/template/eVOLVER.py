@@ -68,6 +68,9 @@ class EvolverNamespace(BaseNamespace):
         logger.info("reconnected to eVOLVER as client")
 
     def on_broadcast(self, data):
+        #if experiment is paused skip on_broadcast()
+        if self.pause:
+            return
         print("Broadcast received",flush=True)
         logger.debug('broadcast received')
         elapsed_time = round((time.time() - self.start_time) / 3600, 4)
