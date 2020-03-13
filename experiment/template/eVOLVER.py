@@ -515,6 +515,9 @@ class EvolverNamespace(BaseNamespace):
     def stop_exp(self):
         self.stop_all_pumps()
 
+    def gitPush(self):
+        pass
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-z","--zero")
