@@ -10,6 +10,7 @@ import argparse
 import numpy as np
 import json
 import traceback
+import statistics
 from scipy import stats
 from socketIO_client import SocketIO, BaseNamespace
 
@@ -54,6 +55,8 @@ class EvolverNamespace(BaseNamespace):
     OD_initial = None
 
     pause = False
+    tempWindows = []
+    ODWindows = []
 
     def on_connect(self, *args):
         #print("Connected to eVOLVER as client")
@@ -103,26 +106,26 @@ class EvolverNamespace(BaseNamespace):
         data['transformed']['od'] = (data['transformed']['od'] -
                                         self.OD_initial)
         # save data
-        if self.pause == False:
-            self.save_data(data['transformed']['od'], elapsed_time,
-                            VIALS, 'OD')
-            self.save_data(data['transformed']['temp'], elapsed_time,
-                            VIALS, 'temp')
+        self.save_data(data['transformed']['od'], elapsed_time,
+                        VIALS, 'OD')
+        self.save_data(data['transformed']['temp'], elapsed_time,
+                        VIALS, 'temp')
 
-            for param in od_cal['params']:
-                self.save_data(data['data'].get(param, []), elapsed_time,
-                            VIALS, param + '_raw')
-            for param in temp_cal['params']:
-                self.save_data(data['data'].get(param, []), elapsed_time,
-                            VIALS, param + '_raw')
+        # check for media spills
+        self.spill_check(data['transformed']['od'], VIALS, 'OD')
+        self.spill_check(data['transformed']['temp'], VIALS, 'temp')
+
+        for param in od_cal['params']:
+            self.save_data(data['data'].get(param, []), elapsed_time,
+                        VIALS, param + '_raw')
+        for param in temp_cal['params']:
+            self.save_data(data['data'].get(param, []), elapsed_time,
+                        VIALS, param + '_raw')
 
         # run custom functions
         self.custom_functions(data, VIALS, elapsed_time)
         # save variables
         self.save_variables(self.start_time, self.OD_initial)
-
-        # error functionality features
-        # media spill
 
 
     def on_activecalibrations(self, data):
@@ -515,6 +518,41 @@ class EvolverNamespace(BaseNamespace):
     def stop_exp(self):
         self.stop_all_pumps()
 
+    def spill_check(self, data, vial, parameter):
+        for x in vials:
+            if parameter == 'temp':
+                if (len(self.tempWindow) < 16):
+                    new_vial = [data[x]]
+                    self.tempWindow.append(new_vial)
+                else:
+                    self.tempWindow[x].append(data[x])
+                    size = len(self.tempWindow[x])
+                    if (size == 10):
+                        #calculate moving average and z-score for new data point
+                        avg = sum(self.tempWindow[x]) / 10
+                        std = stdev(self.tempWindow[x])
+                        z_score = (data[x] - avg) / std
+                        if (z_score > 3):
+                            self.pause = True
+                            logger.error('Potential spill detected in vial %s' % x)
+                        self.tempWindow[x].pop(0)
+            if parameter == 'OD':
+                if (len(self.ODWindow) < 16):
+                    new_vial = [data[x]]
+                    self.ODWindow.append(new_vial)
+                else:
+                    self.ODWindow[x].append(data[x])
+                    size = len(self.ODWindow[x])
+                    if (size == 10):
+                        #calculate moving average and z-score for new data point
+                        avg = sum(self.ODWindow[x]) / 10
+                        std = stdev(self.ODWindow[x])
+                        z_score = (data[x] - avg) / std
+                        if (z_score > 3):
+                            self.pause = True
+                            logger.error('Potential spill detected in vial %s' % x)
+                        self.ODWindow[x].pop(0)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-z","--zero")
@@ -619,6 +657,6 @@ if __name__ == '__main__':
             EVOLVER_NS.pause = True
         if 'continue-script' in message:
             print('Restarting expt', flush=True)
-            logger.warning('resuming experiment')
+            logger.info('resuming experiment')
             socketIO.connect()
             EVOLVER_NS.pause = False
