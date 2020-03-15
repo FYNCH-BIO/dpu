@@ -55,8 +55,8 @@ class EvolverNamespace(BaseNamespace):
     OD_initial = None
 
     pause = False
-    tempWindows = []
-    ODWindows = []
+    tempWindow = [ [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []  ]
+    spillCount = 0
 
     def on_connect(self, *args):
         #print("Connected to eVOLVER as client")
@@ -112,8 +112,7 @@ class EvolverNamespace(BaseNamespace):
                         VIALS, 'temp')
 
         # check for media spills
-        self.spill_check(data['transformed']['od'], VIALS, 'OD')
-        self.spill_check(data['transformed']['temp'], VIALS, 'temp')
+        self.spill_check(data['transformed']['temp'], VIALS)
 
         for param in od_cal['params']:
             self.save_data(data['data'].get(param, []), elapsed_time,
@@ -518,40 +517,29 @@ class EvolverNamespace(BaseNamespace):
     def stop_exp(self):
         self.stop_all_pumps()
 
-    def spill_check(self, data, vial, parameter):
+    def spill_detection(self, data, vials):
         for x in vials:
-            if parameter == 'temp':
-                if (len(self.tempWindow) < 16):
-                    new_vial = [data[x]]
-                    self.tempWindow.append(new_vial)
+            newData = float(data[x])
+            size = len(self.tempWindow)
+            #add to window till it reaches proper window size
+            if (size < self.windowSize):
+                self.tempWindow.append(newData)
+            if (size == 10):
+                #calculate moving average and z-score for new data point
+                avg = sum(self.tempWindow) / len(self.tempWindow)
+                std = stdev(self.tempWindow)
+                diff = abs((abs(newData) - avg))
+                z_score = diff / std
+                if (z_score > 10 and std >= 0.04 and diff > 2):
+                    logger.warn('Large temperature deviation detected in vial %f' % vials[x])
+                    self.spillCount += 1
                 else:
-                    self.tempWindow[x].append(data[x])
-                    size = len(self.tempWindow[x])
-                    if (size == 10):
-                        #calculate moving average and z-score for new data point
-                        avg = sum(self.tempWindow[x]) / 10
-                        std = stdev(self.tempWindow[x])
-                        z_score = (data[x] - avg) / std
-                        if (z_score > 3):
-                            self.pause = True
-                            logger.error('Potential spill detected in vial %s' % x)
-                        self.tempWindow[x].pop(0)
-            if parameter == 'OD':
-                if (len(self.ODWindow) < 16):
-                    new_vial = [data[x]]
-                    self.ODWindow.append(new_vial)
-                else:
-                    self.ODWindow[x].append(data[x])
-                    size = len(self.ODWindow[x])
-                    if (size == 10):
-                        #calculate moving average and z-score for new data point
-                        avg = sum(self.ODWindow[x]) / 10
-                        std = stdev(self.ODWindow[x])
-                        z_score = (data[x] - avg) / std
-                        if (z_score > 3):
-                            self.pause = True
-                            logger.error('Potential spill detected in vial %s' % x)
-                        self.ODWindow[x].pop(0)
+                    self.tempWindow.append(newData)
+                    self.tempWindow.pop(0)
+                if (self.spillCount == 3):
+                    logger.warn('Potential spill detected in vial %f' % vials[x])
+                    self.pause = True
+                    return True
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
