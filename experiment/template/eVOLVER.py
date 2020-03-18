@@ -532,12 +532,14 @@ class EvolverNamespace(BaseNamespace):
                 z_score = diff / std
                 if (z_score > 10 and std >= 0.04 and diff > 2):
                     logger.warn('Large temperature deviation detected in vial %f' % vials[x])
+                    print('slack:Lage temperature deviation detected in vial:', vials[x], flush=True)
                     self.spillCount += 1
                 else:
                     self.tempWindow.append(newData)
                     self.tempWindow.pop(0)
                 if (self.spillCount == 3):
                     logger.warn('Potential spill detected in vial %f' % vials[x])
+                    print('slack:Potential spill detected in vial: ', vials[x], flush=True)
                     self.pause = True
                     return True
 
