@@ -12,6 +12,7 @@ import json
 import traceback
 from scipy import stats
 from socketIO_client import SocketIO, BaseNamespace
+from git import Repo
 
 
 import custom_script
@@ -54,6 +55,9 @@ class EvolverNamespace(BaseNamespace):
     OD_initial = None
 
     pause = False
+
+    gitURL = None
+    gitPath = None
 
     def on_connect(self, *args):
         #print("Connected to eVOLVER as client")
@@ -103,27 +107,22 @@ class EvolverNamespace(BaseNamespace):
         data['transformed']['od'] = (data['transformed']['od'] -
                                         self.OD_initial)
         # save data
-        if self.pause == False:
-            self.save_data(data['transformed']['od'], elapsed_time,
-                            VIALS, 'OD')
-            self.save_data(data['transformed']['temp'], elapsed_time,
-                            VIALS, 'temp')
+        self.save_data(data['transformed']['od'], elapsed_time,
+                        VIALS, 'OD')
+        self.save_data(data['transformed']['temp'], elapsed_time,
+                        VIALS, 'temp')
 
-            for param in od_cal['params']:
-                self.save_data(data['data'].get(param, []), elapsed_time,
-                            VIALS, param + '_raw')
-            for param in temp_cal['params']:
-                self.save_data(data['data'].get(param, []), elapsed_time,
-                            VIALS, param + '_raw')
+        for param in od_cal['params']:
+            self.save_data(data['data'].get(param, []), elapsed_time,
+                        VIALS, param + '_raw')
+        for param in temp_cal['params']:
+            self.save_data(data['data'].get(param, []), elapsed_time,
+                        VIALS, param + '_raw')
 
         # run custom functions
         self.custom_functions(data, VIALS, elapsed_time)
         # save variables
         self.save_variables(self.start_time, self.OD_initial)
-
-        # error functionality features
-        # media spill
-
 
     def on_activecalibrations(self, data):
         #print('Calibrations recieved',flush=True)
@@ -354,6 +353,7 @@ class EvolverNamespace(BaseNamespace):
             start_time = time.time()
             self.request_calibrations()
 
+            self.createRepo()
             logger.debug('creating data directories')
             os.makedirs(os.path.join(self.expDirectory, 'OD'))
             os.makedirs(os.path.join(self.expDirectory, 'temp'))
@@ -515,8 +515,21 @@ class EvolverNamespace(BaseNamespace):
     def stop_exp(self):
         self.stop_all_pumps()
 
-    def gitPush(self):
-        pass
+    def createRepo(self):
+        gitConfigPath = os.path.join(self.savePath, 'GitHubConfig.json')
+
+        with open(gitConfigPath) as f:
+            gitConfig = json.load(f)
+            self.gitURL = gitConfig['remoteURL']
+            self.gitPath = gitConfig['localPath']
+        print(self.gitPath,flush=True)
+        try:
+            origin = Repo(self.gitPath)
+            print(origin.git.status(),flush=True)
+        except:
+            empty_repo = git.Repo.init(os.path.join(self.gitPath))
+            origin = empty_repo.create_remote('origin', self.gitURL)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
