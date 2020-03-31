@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+
+{% block bokeh_script %}
+{% endblock %}
+
+
+
+
+{% block content %}
+
+<div class="row">
+<h3>{{experiment}}: <span class='notbold'>All vials</span></h3>
+
+<div class="btn-toolbar" role="toolbar" aria-label="Toolbar with button groups">
+	{% for x in vial_count %}
+	<a href="{% url 'home' %}{{experiment}}/{{x}}" class="btn btn-default btn">{{x}}</a>
+	{% endfor %}
+
+    <a href="{% url 'home' %}{{experiment}}/dilutions" class="btn btn-default btn">dil</a>
+
+</div>
+
+<br>
+<div>
+    <table class="table">
+        <caption>Media consumption (based on dilution)</caption>
+        <tr>
+            <td><b>Vial 0:</b> {{ diluted.0 }} L</td>
+            <td><b>Vial 1:</b> {{ diluted.1 }} L</td>
+            <td><b>Vial 2:</b> {{ diluted.2 }} L</td>
+            <td><b>Vial 3:</b> {{ diluted.3 }} L</td>
+        </tr>
+            <tr>
+            <td><b>Vial 4:</b> {{ diluted.4 }} L</td>
+            <td><b>Vial 5:</b> {{ diluted.5 }} L</td>
+            <td><b>Vial 6:</b> {{ diluted.6 }} L</td>
+            <td><b>Vial 7:</b> {{ diluted.7 }} L</td>
+        </tr>
+            <tr>
+            <td><b>Vial 8:</b> {{ diluted.8 }} L</td>
+            <td><b>Vial 9:</b> {{ diluted.9 }} L</td>
+            <td><b>Vial 10:</b> {{ diluted.10 }} L</td>
+            <td><b>Vial 11:</b> {{ diluted.11 }} L</td>
+        </tr>
+            <tr>
+            <td><b>Vial 12:</b> {{ diluted.12 }} L</td>
+            <td><b>Vial 13:</b> {{ diluted.13 }} L</td>
+            <td><b>Vial 14:</b> {{ diluted.14 }} L</td>
+            <td><b>Vial 15:</b> {{ diluted.15 }} L</td>
+        </tr>
+    </table>
+</div>
+
+<p> Last dilution Value Calculated:  </p> <!--TODO-->
+
+</div>
+
+
+{% endblock%}

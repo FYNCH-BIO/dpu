@@ -94,7 +94,37 @@ def expt_name(request, experiment):
 
 	return render(request, "experiment.html", context)
 
+def dilutions(request, experiment):
+	sidebar_links, subdir_log = file_scan('expt')
+	vial_count = range(0, 16)
+	expt_dir, expt_subdir = file_scan(experiment)
+	rootdir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+	evolver_dir = rootdir + '/experiment'
+	pump_cal = evolver_dir + "/%s/pump_cal.txt" % (expt_subdir[0])
 
+	cal = np.genfromtxt(pump_cal, delimiter="\t")
+	diluted = []
+
+	for vial in vial_count:
+		pump_dir = evolver_dir + "/%s/%s/pump_log/vial%s_pump_log.txt" % (expt_subdir[0], experiment, vial)
+		data = np.genfromtxt(pump_dir, delimiter=',', skip_header=2)
+		if len(data) != 0:
+			volume = str(round(sum(data[:, 1]) * cal[0, vial] / 1000, 2))
+
+		else:
+			volume = 0
+
+		diluted.append(volume)
+		# TODO: get time of last dilution (global or per vial)
+
+		context = {
+		"sidebar_links": sidebar_links,
+		"experiment": experiment,
+		"vial_count": vial_count,
+		"diluted": diluted
+		}
+
+	return render(request, "dilutions.html", context)
 
 
 def file_scan(tag):
