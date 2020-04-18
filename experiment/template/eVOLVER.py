@@ -13,6 +13,7 @@ import traceback
 import statistics
 from scipy import stats
 from socketIO_client import SocketIO, BaseNamespace
+from git import Repo
 
 
 import custom_script
@@ -57,6 +58,9 @@ class EvolverNamespace(BaseNamespace):
     pause = False
     tempWindow = [ [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []  ]
     spillCount = 0
+
+    gitURL = None
+    gitPath = None
 
     def on_connect(self, *args):
         #print("Connected to eVOLVER as client")
@@ -111,9 +115,12 @@ class EvolverNamespace(BaseNamespace):
         self.save_data(data['transformed']['temp'], elapsed_time,
                         VIALS, 'temp')
 
+<<<<<<< HEAD
         # check for media spills
         self.spill_check(data['transformed']['temp'], VIALS)
 
+=======
+>>>>>>> github_data
         for param in od_cal['params']:
             self.save_data(data['data'].get(param, []), elapsed_time,
                         VIALS, param + '_raw')
@@ -126,7 +133,10 @@ class EvolverNamespace(BaseNamespace):
         # save variables
         self.save_variables(self.start_time, self.OD_initial)
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> github_data
     def on_activecalibrations(self, data):
         #print('Calibrations recieved',flush=True)
         for calibration in data:
@@ -356,6 +366,7 @@ class EvolverNamespace(BaseNamespace):
             start_time = time.time()
             self.request_calibrations()
 
+            self.createRepo()
             logger.debug('creating data directories')
             os.makedirs(os.path.join(self.expDirectory, 'OD'))
             os.makedirs(os.path.join(self.expDirectory, 'temp'))
@@ -542,6 +553,22 @@ class EvolverNamespace(BaseNamespace):
                     print('slack:Potential spill detected in vial: ', vials[x], flush=True)
                     self.pause = True
                     return True
+
+    def createRepo(self):
+        gitConfigPath = os.path.join(self.savePath, 'GitHubConfig.json')
+
+        with open(gitConfigPath) as f:
+            gitConfig = json.load(f)
+            self.gitURL = gitConfig['remoteURL']
+            self.gitPath = gitConfig['localPath']
+        print(self.gitPath,flush=True)
+        try:
+            origin = Repo(self.gitPath)
+            print(origin.git.status(),flush=True)
+        except:
+            empty_repo = git.Repo.init(os.path.join(self.gitPath))
+            origin = empty_repo.create_remote('origin', self.gitURL)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
