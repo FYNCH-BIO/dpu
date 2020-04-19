@@ -120,7 +120,11 @@ class EvolverNamespace(BaseNamespace):
         self.spill_check(data['transformed']['temp'], VIALS)
 
 =======
+<<<<<<< HEAD
 >>>>>>> f032767... Working on github integration
+=======
+>>>>>>> github_data
+>>>>>>> 9b8c92c8f1b50dff468c7f3a78a0df7878899d5e
         for param in od_cal['params']:
             self.save_data(data['data'].get(param, []), elapsed_time,
                         VIALS, param + '_raw')
@@ -136,7 +140,11 @@ class EvolverNamespace(BaseNamespace):
 <<<<<<< HEAD
 
 =======
+<<<<<<< HEAD
 >>>>>>> f032767... Working on github integration
+=======
+>>>>>>> github_data
+>>>>>>> 9b8c92c8f1b50dff468c7f3a78a0df7878899d5e
     def on_activecalibrations(self, data):
         #print('Calibrations recieved',flush=True)
         for calibration in data:
