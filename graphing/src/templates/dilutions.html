@@ -24,7 +24,7 @@
 <br>
 <div>
     <table class="table">
-        <caption>Media consumption (based on dilution)</caption>
+        <caption><b>Media consumption (based on dilution)</b></caption>
         <tr>
             <td><b>Vial 0:</b> {{ diluted.0 }} L</td>
             <td><b>Vial 1:</b> {{ diluted.1 }} L</td>
@@ -52,7 +52,38 @@
     </table>
 </div>
 
-<p> Last dilution Value Calculated:  </p> <!--TODO-->
+<div>
+    <table class="table">
+        <caption><b>Dilution efficiency (% of direct dilutions)</b></caption>
+        <tr>
+            <td><b>Vial 0:</b> {{ efficiency.0 }}%</td>
+            <td><b>Vial 1:</b> {{ efficiency.1 }}%</td>
+            <td><b>Vial 2:</b> {{ efficiency.2 }}%</td>
+            <td><b>Vial 3:</b> {{ efficiency.3 }}%</td>
+        </tr>
+            <tr>
+            <td><b>Vial 4:</b> {{ efficiency.4 }}%</td>
+            <td><b>Vial 5:</b> {{ efficiency.5 }}%</td>
+            <td><b>Vial 6:</b> {{ efficiency.6 }}%</td>
+            <td><b>Vial 7:</b> {{ efficiency.7 }}%</td>
+        </tr>
+            <tr>
+            <td><b>Vial 8:</b> {{ efficiency.8 }}%</td>
+            <td><b>Vial 9:</b> {{ efficiency.9 }}%</td>
+            <td><b>Vial 10:</b> {{ efficiency.10 }}%</td>
+            <td><b>Vial 11:</b> {{ efficiency.11 }}%</td>
+        </tr>
+            <tr>
+            <td><b>Vial 12:</b> {{ efficiency.12 }}%</td>
+            <td><b>Vial 13:</b> {{ efficiency.13 }}%</td>
+            <td><b>Vial 14:</b> {{ efficiency.14 }}%</td>
+            <td><b>Vial 15:</b> {{ efficiency.15 }}%</td>
+        </tr>
+    </table>
+</div>
+
+
+<p> Last dilution: {{ last_dilution }} </p>
 
 </div>
 

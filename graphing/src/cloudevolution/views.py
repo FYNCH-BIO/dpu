@@ -104,25 +104,42 @@ def dilutions(request, experiment):
 
 	cal = np.genfromtxt(pump_cal, delimiter="\t")
 	diluted = []
+	efficiency = []
+	last = []
 
 	for vial in vial_count:
 		pump_dir = evolver_dir + "/%s/%s/pump_log/vial%s_pump_log.txt" % (expt_subdir[0], experiment, vial)
+		ODset_dir = evolver_dir + "/%s/%s/ODset/vial%s_ODset.txt" % (expt_subdir[0], experiment, vial)
 		data = np.genfromtxt(pump_dir, delimiter=',', skip_header=2)
-		if len(data) != 0:
+
+		dil_triggered = len(data)
+
+		if dil_triggered != 0:
 			volume = str(round(sum(data[:, 1]) * cal[0, vial] / 1000, 2))
+
+			dil_intervals = len(np.genfromtxt(ODset_dir, delimiter=",", skip_header=2)) / 2
+			extra_dils = dil_triggered - dil_intervals
+			vial_eff = (dil_intervals - extra_dils) / dil_intervals * 100
 
 		else:
 			volume = 0
+			vial_eff = 0
 
 		diluted.append(volume)
-		# TODO: get time of last dilution (global or per vial)
+		efficiency.append(str(round(vial_eff, 1)))
+		last.append(time.ctime(os.path.getmtime(pump_dir)))
 
-		context = {
-		"sidebar_links": sidebar_links,
-		"experiment": experiment,
-		"vial_count": vial_count,
-		"diluted": diluted
-		}
+	print(last)
+	last_dilution = max(last)
+
+	context = {
+	"sidebar_links": sidebar_links,
+	"experiment": experiment,
+	"vial_count": vial_count,
+	"diluted": diluted,
+	"efficiency": efficiency,
+	"last_dilution": last_dilution
+	}
 
 	return render(request, "dilutions.html", context)
 
