@@ -33,9 +33,9 @@ def vial_num(request, experiment, vial):
 	vial_count = range(0, 16)
 	expt_dir, expt_subdir = file_scan(experiment)
 	rootdir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-	evolver_dir = rootdir + '/experiment'
-	OD_dir = evolver_dir + "/%s/%s/OD/vial%s_OD.txt" % (expt_subdir[0],experiment,vial)
-	temp_dir = evolver_dir + "/%s/%s/temp/vial%s_temp.txt" % (expt_subdir[0],experiment,vial)
+	evolver_dir = os.path.join(rootdir, 'experiment')
+	OD_dir = os.path.join(evolver_dir, expt_subdir[0], experiment, "OD", "vial{0}_OD.txt".format(vial))
+	temp_dir = os.path.join(evolver_dir, expt_subdir[0], experiment, "temp", "vial{0}_temp.txt".format(vial))
 
 
 	with open(OD_dir) as f_in:
@@ -99,8 +99,8 @@ def dilutions(request, experiment):
 	vial_count = range(0, 16)
 	expt_dir, expt_subdir = file_scan(experiment)
 	rootdir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-	evolver_dir = rootdir + '/experiment'
-	pump_cal = evolver_dir + "/%s/pump_cal.txt" % (expt_subdir[0])
+	evolver_dir = os.path.join(rootdir, 'experiment')
+	pump_cal = os.path.join(evolver_dir, expt_subdir[0], "pump_cal.txt")
 
 	cal = np.genfromtxt(pump_cal, delimiter="\t")
 	diluted = []
@@ -108,8 +108,8 @@ def dilutions(request, experiment):
 	last = []
 
 	for vial in vial_count:
-		pump_dir = evolver_dir + "/%s/%s/pump_log/vial%s_pump_log.txt" % (expt_subdir[0], experiment, vial)
-		ODset_dir = evolver_dir + "/%s/%s/ODset/vial%s_ODset.txt" % (expt_subdir[0], experiment, vial)
+		pump_dir = os.path.join(evolver_dir, expt_subdir[0], experiment, "pump_log", "vial{0}_pump_log.txt".format(vial))
+		ODset_dir = os.path.join(evolver_dir, expt_subdir[0], experiment, "ODset", "vial{0}_ODset.txt".format(vial))
 		data = np.genfromtxt(pump_dir, delimiter=',', skip_header=2)
 
 		dil_triggered = len(data)
@@ -146,20 +146,20 @@ def dilutions(request, experiment):
 
 def file_scan(tag):
 	rootdir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-	evolver_dir = rootdir + '/experiment'
+	evolver_dir = os.path.join(rootdir, "experiment")
 	url_string = '{%s url "home" %s}' % ('%','%')
 
 	sidebar_links =[]
 	subdir_log = []
 
 	for subdir in next(os.walk(evolver_dir))[1]:
-	    subdirname = os.path.join(next(os.walk(evolver_dir))[0], subdir)
+		subdirname = os.path.join(next(os.walk(evolver_dir))[0], subdir)
 
-	    for subsubdir in next(os.walk(subdirname))[1]:
-	        if tag in subsubdir:
-	            #add_string = "<li><a href='http://127.0.0.1:8000/%s'>%s</a></li>" % (subsubdir,subsubdir)
-	            #add_string = "<li><a href='%s'>%s</a></li>" % (url_string,subsubdir)
-	            sidebar_links.append(subsubdir)
-	            subdir_log.append(subdir)
+		for subsubdir in next(os.walk(subdirname))[1]:
+			if tag in subsubdir:
+				#add_string = "<li><a href='%s'>%s</a></li>" % (url_string,subsubdir)
+				sidebar_links.append(subsubdir)
+				subdir_log.append(subdir)
+				subdir_log.append(subdir)
 
 	return sidebar_links,subdir_log
