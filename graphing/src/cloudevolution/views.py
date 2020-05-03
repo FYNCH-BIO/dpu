@@ -118,8 +118,12 @@ def dilutions(request, experiment):
 			volume = str(round(sum(data[:, 1]) * cal[0, vial] / 1000, 2))
 
 			dil_intervals = len(np.genfromtxt(ODset_dir, delimiter=",", skip_header=2)) / 2
-			extra_dils = dil_triggered - dil_intervals
-			vial_eff = (dil_intervals - extra_dils) / dil_intervals * 100
+			if dil_intervals != 0:
+				extra_dils = dil_triggered - dil_intervals
+				vial_eff = (dil_intervals - extra_dils) / dil_intervals * 100
+			else:
+				# Experiment is chemostat or vial is not used
+				vial_eff = 0
 
 		else:
 			volume = 0
@@ -129,8 +133,11 @@ def dilutions(request, experiment):
 		efficiency.append(str(round(vial_eff, 1)))
 		last.append(time.ctime(os.path.getmtime(pump_dir)))
 
-	print(last)
 	last_dilution = max(last)
+
+	if efficiency == ['0']*16:
+		# All vials were chemostats or not used
+		efficiency = None
 
 	context = {
 	"sidebar_links": sidebar_links,
