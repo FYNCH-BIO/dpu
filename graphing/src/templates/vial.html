@@ -19,6 +19,8 @@
 	<a href="{% url 'home' %}{{experiment}}/{{x}}" class="btn btn-default btn">{{x}}</a>
 	{% endfor %}
 
+    <a href="{% url 'home' %}{{experiment}}/dilutions" class="btn btn-default btn">Dilutions</a>
+
 </div>
 
 {{OD_div|safe}}
