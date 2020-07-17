@@ -9,7 +9,6 @@ import os
 import time
 import math
 
-
 # Create your views here.
 def home(request):
 	sidebar_links, subdir_log = file_scan('expt')
@@ -68,6 +67,14 @@ def vial_num(request, experiment, vial):
 	gr_data = np.genfromtxt(gr_dir, delimiter=',', skip_header=2)
 
 	last_grate_update = time.ctime(os.path.getmtime(gr_dir))
+
+	# Quick patch when there's not enough growth rate values
+	if gr_data.ndim < 2 or len(gr_data) <= 2:
+		gr_data = np.asarray([[0, 0]])  # Avoids exception in p.line(gr.data ...)
+		last_grate_update = "Not enough OD data yet!"  # Change time for a warning
+	else:
+		# Chop out first gr value, biased by the diff between the initial OD and the lower_thresh
+		gr_data = gr_data[1:]
 
 	p = figure(plot_width=700, plot_height=400)
 	p.y_range = Range1d(0, 1)  # Customize here y-axis range
