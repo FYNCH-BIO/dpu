@@ -26,6 +26,7 @@ VIALS = [x for x in range(16)]
 SAVE_PATH = os.path.dirname(os.path.realpath(__file__))
 EXP_DIR = os.path.join(SAVE_PATH, EXP_NAME)
 OD_CAL_PATH = os.path.join(SAVE_PATH, 'od_cal.json')
+OD_RAW_ZERO_PATH =  os.path.join(SAVE_PATH, 'od_raw_zero.json')
 TEMP_CAL_PATH = os.path.join(SAVE_PATH, 'temp_cal.json')
 
 SIGMOID = 'sigmoid'
@@ -69,7 +70,6 @@ class EvolverNamespace(BaseNamespace):
         with open(TEMP_CAL_PATH) as f:
             temp_cal = json.load(f)
 
-        # apply calibrations
         # update temperatures if needed
         data = self.transform_data(data, VIALS, od_cal, temp_cal)
         if data is None:
@@ -78,13 +78,40 @@ class EvolverNamespace(BaseNamespace):
             return
 
         # should we "blank" the OD?
-        if self.use_blank and self.OD_initial is None:
-            logger.info('setting initial OD reading')
-            self.OD_initial = data['transformed']['od']
-        elif self.OD_initial is None:
-            self.OD_initial = np.zeros(len(VIALS))
-        data['transformed']['od'] = (data['transformed']['od'] -
-                                        self.OD_initial)
+        if not self.use_raw_blank:
+            if self.use_blank and self.OD_initial is None:  # This used to be the normal procedure
+                logger.info('setting initial OD reading (OD values)')
+                data = self.apply_OD_calibration(data, VIALS, od_cal)
+                self.OD_initial = data['transformed']['od']
+            elif self.OD_initial is None:
+                self.OD_initial = np.zeros(len(VIALS))
+            data['transformed']['od'] = (data['transformed']['od'] -
+                                         self.OD_initial)
+        else:
+            if self.use_blank and self.OD_initial is None:
+                logger.info('setting initial OD reading (raw_values)')
+                """
+                    Given Raw_cal_0, Raw_exp_0 and Raw_exp_t
+                    We can calculate delta as:
+                    delta = Raw_expt_t - Raw_exp_0
+                    And therefore calculate the OD as:
+                    OD = f(Raw_cal_0 + delta)
+                    Which extended is:
+                    OD = f(Raw_cal_0 - Raw_expt_0 + Raw_expt_t
+                    So we can store "Raw_cal_0 - Raw_expt_0" in self.OD_initial
+                    And add it to the measured Raw_expt_t before calculating the final OD
+                """
+                # get calibration raw blank
+                with open(OD_RAW_ZERO_PATH, 'r') as f:
+                    zero_cal_values = np.array(json.load(f))
+
+                self.OD_initial = zero_cal_values - data['data']['od_135']  # TODO: generalize for other od parameters
+
+            elif self.OD_initial is None:
+                self.OD_initial = np.zeros(len(VIALS))
+
+            data = self.apply_OD_calibration(data, VIALS, od_cal)
+
         # save data
         self.save_data(data['transformed']['od'], elapsed_time,
                         VIALS, 'OD')
@@ -124,6 +151,23 @@ class EvolverNamespace(BaseNamespace):
                                         x,
                                         time.strftime("%c"))
                                 self._create_file(x, param + '_raw', defaults=[exp_str])
+                        try:
+                            if calibration['calibrationType'] == 'od' and param == 'od_135': # TODO: generalize for other od parameters
+                                # Fetch raw calibration values for OD = 0
+                                zero_cal_raw = []
+                                for x in calibration['raw']:
+                                    if x['param'] == 'od_135':
+                                        raw_cal_values = x['vialData']
+
+                                for od_list in calibration['measuredData']:
+                                    ind = od_list.index(0)
+                                    zero_cal_raw.append(sum(raw_cal_values[ind]) / 3)  # Store the mean raw zero value
+
+                                with open(OD_RAW_ZERO_PATH, 'w') as f:
+                                    json.dump(zero_cal_raw, f)
+                        except Exception as e:
+                            logger.debug(e)
+                            self.use_raw_blank = False
                     break
 
     def request_calibrations(self):
@@ -162,36 +206,8 @@ class EvolverNamespace(BaseNamespace):
             temp_set_data = np.genfromtxt(file_path, delimiter=',')
             temp_set = temp_set_data[len(temp_set_data)-1][1]
             temps.append(temp_set)
-            od_coefficients = od_cal['coefficients'][x]
             temp_coefficients = temp_cal['coefficients'][x]
-            try:
-                if od_cal['type'] == SIGMOID:
-                    #convert raw photodiode data into ODdata using calibration curve
-                    od_data[x] = np.real(od_coefficients[2] -
-                                        ((np.log10((od_coefficients[1] -
-                                                    od_coefficients[0]) /
-                                                    (float(od_data[x]) -
-                                                    od_coefficients[0])-1)) /
-                                                    od_coefficients[3]))
-                    if not np.isfinite(od_data[x]):
-                        od_data[x] = 'NaN'
-                        logger.debug('OD from vial %d: %s' % (x, od_data[x]))
-                    else:
-                        logger.debug('OD from vial %d: %.3f' % (x, od_data[x]))
-                elif od_cal['type'] == THREE_DIMENSION:
-                    od_data[x] = np.real(od_coefficients[0] +
-                                        (od_coefficients[1]*od_data[x]) +
-                                        (od_coefficients[2]*od_data_2[x]) +
-                                        (od_coefficients[3]*(od_data[x]**2)) +
-                                        (od_coefficients[4]*od_data[x]*od_data_2[x]) +
-                                        (od_coefficients[5]*(od_data_2[x]**2)))
-                else:
-                    logger.error('OD calibration not of supported type!')
-                    od_data[x] = 'NaN'
-            except ValueError:
-                print("OD Read Error")
-                logger.error('OD read error for vial %d, setting to NaN' % x)
-                od_data[x] = 'NaN'
+
             try:
                 temp_data[x] = (float(temp_data[x]) *
                                 temp_coefficients[0]) + temp_coefficients[1]
@@ -238,6 +254,66 @@ class EvolverNamespace(BaseNamespace):
         data['transformed'] = {}
         data['transformed']['od'] = od_data
         data['transformed']['temp'] = temp_data
+        return data
+
+    def apply_OD_calibration(self, data, vials, od_cal):
+        od_data_2 = None
+        if od_cal['type'] == THREE_DIMENSION:
+            od_data_2 = data['data'].get(od_cal['params'][1], None)
+
+        od_data = data['data'].get(od_cal['params'][0], None)
+        if self.use_raw_blank:
+            zero_delta = self.OD_initial
+        else:
+            zero_delta = np.zeros(len(vials))
+
+        if od_data is None:
+            print('Incomplete data recieved, Error with measurement')
+            logger.error('Incomplete data received, error with measurements')
+            return None
+        if 'NaN' in od_data:
+            print('NaN recieved, Error with measurement')
+            logger.error('NaN received, error with measurements')
+            return None
+
+        od_data = np.array([float(x) for x in od_data])
+        if od_data_2:
+            od_data_2 = np.array([float(x) for x in od_data_2])
+
+        for x in vials:
+            od_coefficients = od_cal['coefficients'][x]
+            try:
+                if od_cal['type'] == SIGMOID:
+                    #convert raw photodiode data into ODdata using calibration curve
+                    od_data[x] = np.real(od_coefficients[2] -
+                                        ((np.log10((od_coefficients[1] -
+                                                    od_coefficients[0]) /
+                                                    (zero_delta + float(od_data[x]) -
+                                                    od_coefficients[0])-1)) /
+                                                    od_coefficients[3]))
+                    if not np.isfinite(od_data[x]):
+                        od_data[x] = 'NaN'
+                        logger.debug('OD from vial %d: %s' % (x, od_data[x]))
+                    else:
+                        logger.debug('OD from vial %d: %.3f' % (x, od_data[x]))
+                elif od_cal['type'] == THREE_DIMENSION:
+                    od_data[x] = np.real(od_coefficients[0] +
+                                        (od_coefficients[1]*od_data[x]) +
+                                        (od_coefficients[2]*od_data_2[x]) +
+                                        (od_coefficients[3]*(od_data[x]**2)) +
+                                        (od_coefficients[4]*od_data[x]*od_data_2[x]) +
+                                        (od_coefficients[5]*(od_data_2[x]**2)))
+                else:
+                    logger.error('OD calibration not of supported type!')
+                    od_data[x] = 'NaN'
+            except ValueError:
+                print("OD Read Error")
+                logger.error('OD read error for vial %d, setting to NaN' % x)
+                od_data[x] = 'NaN'
+
+        # add a new field in the data dictionary
+        data['transformed'] = {}
+        data['transformed']['od'] = od_data
         return data
 
     def update_stir_rate(self, stir_rates, immediate = False):
@@ -391,9 +467,16 @@ class EvolverNamespace(BaseNamespace):
             if exp_blank == 'y':
                 # will do it with first broadcast
                 self.use_blank = True
-                logger.info('will use initial OD measurement as blank')
+                raw_blank = input('Use raw blank instead of OD blank? (y/n): ')
+                if raw_blank == 'y':
+                    logger.info('will use initial raw measurement as blank')
+                    self.use_raw_blank = True
+                else:
+                    logger.info('will use initial OD measurement as blank')
+                    self.use_raw_blank = False
             else:
                 self.use_blank = False
+                self.use_raw_blank = False
                 self.OD_initial = np.zeros(len(vials))
         else:
             # load existing experiment
