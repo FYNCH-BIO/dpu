@@ -77,18 +77,10 @@ class EvolverNamespace(BaseNamespace):
                          'defined functions')
             return
 
+        # Store the OD blank depending on the options set (Raw blank, OD blank or none)
         # should we "blank" the OD?
-        if not self.use_raw_blank:
-            if self.use_blank and self.OD_initial is None:  # This used to be the normal procedure
-                logger.info('setting initial OD reading (OD values)')
-                data = self.apply_OD_calibration(data, VIALS, od_cal)
-                self.OD_initial = data['transformed']['od']
-            elif self.OD_initial is None:
-                self.OD_initial = np.zeros(len(VIALS))
-            data['transformed']['od'] = (data['transformed']['od'] -
-                                         self.OD_initial)
-        else:
-            if self.use_blank and self.OD_initial is None:
+        if self.OD_initial is None:
+            if self.use_blank and self.use_raw_blank:
                 logger.info('setting initial OD reading (raw_values)')
                 """
                     Given Raw_cal_0, Raw_exp_0 and Raw_exp_t
@@ -105,12 +97,19 @@ class EvolverNamespace(BaseNamespace):
                 with open(OD_RAW_ZERO_PATH, 'r') as f:
                     zero_cal_values = np.array(json.load(f))
 
-                self.OD_initial = zero_cal_values - data['data']['od_135']  # TODO: generalize for other od parameters
+                self.OD_initial = zero_cal_values - np.array(
+                    [float(x) for x in data['data']['od_135']])  # TODO: generalize for other od parameters
 
-            elif self.OD_initial is None:
+            elif self.use_blank:  # This used to be the normal procedure
+                logger.info('setting initial OD reading (OD values)')
+                data = self.apply_OD_calibration(data, VIALS, od_cal)
+                self.OD_initial = data['transformed']['od']
+
+            else:
                 self.OD_initial = np.zeros(len(VIALS))
 
-            data = self.apply_OD_calibration(data, VIALS, od_cal)
+        # Apply calibration and blank (If it's raw blank, before cal. If it's OD blank, after cal.)
+        data = self.apply_OD_calibration(data, VIALS, od_cal)
 
         # save data
         self.save_data(data['transformed']['od'], elapsed_time,
@@ -127,7 +126,7 @@ class EvolverNamespace(BaseNamespace):
         # run custom functions
         self.custom_functions(data, VIALS, elapsed_time)
         # save variables
-        self.save_variables(self.start_time, self.OD_initial)
+        self.save_variables(self.start_time, self.OD_initial, self.use_raw_blank)
 
     def on_activecalibrations(self, data):
         print('Calibrations recieved')
@@ -159,14 +158,16 @@ class EvolverNamespace(BaseNamespace):
                                     if x['param'] == 'od_135':
                                         raw_cal_values = x['vialData']
 
-                                for od_list in calibration['measuredData']:
+                                for c, od_list in enumerate(calibration['measuredData']):
                                     ind = od_list.index(0)
-                                    zero_cal_raw.append(sum(raw_cal_values[ind]) / 3)  # Store the mean raw zero value
+                                    zero_cal_raw.append(sum(raw_cal_values[c][ind]) / 3)  # Store the mean raw zero value
 
                                 with open(OD_RAW_ZERO_PATH, 'w') as f:
                                     json.dump(zero_cal_raw, f)
                         except Exception as e:
-                            logger.debug(e)
+                            logger.error(f"Error '{e}' when calculating zero raw values of the calibration.")
+                            logger.INFO("Changing to former OD blank method.")
+                            print(e)
                             self.use_raw_blank = False
                     break
 
@@ -262,10 +263,13 @@ class EvolverNamespace(BaseNamespace):
             od_data_2 = data['data'].get(od_cal['params'][1], None)
 
         od_data = data['data'].get(od_cal['params'][0], None)
+
         if self.use_raw_blank:
             zero_delta = self.OD_initial
+            od_blank = np.zeros(len(vials))
         else:
             zero_delta = np.zeros(len(vials))
+            od_blank = self.OD_initial
 
         if od_data is None:
             print('Incomplete data recieved, Error with measurement')
@@ -288,7 +292,7 @@ class EvolverNamespace(BaseNamespace):
                     od_data[x] = np.real(od_coefficients[2] -
                                         ((np.log10((od_coefficients[1] -
                                                     od_coefficients[0]) /
-                                                    (zero_delta + float(od_data[x]) -
+                                                    (zero_delta[x] + float(od_data[x]) -
                                                     od_coefficients[0])-1)) /
                                                     od_coefficients[3]))
                     if not np.isfinite(od_data[x]):
@@ -306,14 +310,14 @@ class EvolverNamespace(BaseNamespace):
                 else:
                     logger.error('OD calibration not of supported type!')
                     od_data[x] = 'NaN'
-            except ValueError:
+            except ValueError as e:
                 print("OD Read Error")
+                #print(e)
                 logger.error('OD read error for vial %d, setting to NaN' % x)
                 od_data[x] = 'NaN'
 
-        # add a new field in the data dictionary
-        data['transformed'] = {}
-        data['transformed']['od'] = od_data
+        # update od data in the data dictionary
+        data['transformed']['od'] = od_data - od_blank
         return data
 
     def update_stir_rate(self, stir_rates, immediate = False):
@@ -488,6 +492,7 @@ class EvolverNamespace(BaseNamespace):
             x = loaded_var
             start_time = x[0]
             self.OD_initial = x[1]
+            self.use_raw_blank = x[2]
 
         # copy current custom script to txt file
         backup_filename = '{0}_{1}.txt'.format(EXP_NAME,
@@ -518,14 +523,14 @@ class EvolverNamespace(BaseNamespace):
             text_file.write("{0},{1}\n".format(elapsed_time, data[x]))
             text_file.close()
 
-    def save_variables(self, start_time, OD_initial):
+    def save_variables(self, start_time, OD_initial, use_raw_blank):
         # save variables needed for restarting experiment later
         save_path = os.path.dirname(os.path.realpath(__file__))
         pickle_name = "{0}.pickle".format(EXP_NAME)
         pickle_path = os.path.join(EXP_DIR, pickle_name)
         logger.debug('saving all variables: %s' % pickle_path)
         with open(pickle_path, 'wb') as f:
-            pickle.dump([start_time, OD_initial], f)
+            pickle.dump([start_time, OD_initial, use_raw_blank], f)
 
     def get_flow_rate(self):
         file_path = os.path.join(SAVE_PATH, PUMP_CAL_FILE)
