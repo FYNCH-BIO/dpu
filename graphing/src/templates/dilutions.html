@@ -52,6 +52,7 @@
     </table>
 </div>
 
+<p> Last dilution: {{ last_dilution }} </p>
 
 {% if efficiency %}
 
@@ -91,10 +92,150 @@
 
 {% endif %}
 
+<div>
+    {% if bottle_info %}
+        <table class="table" id="bottle-table">
+            <caption><b>Bottle media</b></caption>
+            {% for bot in bottles %}
+                {% if forloop.counter0|divisibleby:"4" %}
+                    </tr>
+                    <tr>
+                        <td><b>Bottle {{ forloop.counter0 }}:</b> {{ bot }}</td>
+                {% else %}
+                        <td><b>Bottle {{ forloop.counter0 }}:</b> {{ bot }}</td>
+                {% endif %}
+            {% endfor %}
+            </tr>
+            <!--<tr>
+                <td><b>Bottle 4:</b> {{ bottles.4 }} L</td>
+                <td><b>Bottle 5:</b> {{ bottles.5 }} L</td>
+                <td><b>Bottle 6:</b> {{ bottles.6 }} L</td>
+                <td><b>Bottle 7:</b> {{ bottles.7 }} L</td>
+            </tr>
+            <tr>
+                <td><b>Bottle 8:</b> {{ bottles.8 }} L</td>
+                <td><b>Bottle 9:</b> {{ bottles.9 }} L</td>
+                <td><b>Bottle 10:</b> {{ bottles.10 }} L</td>
+                <td><b>Bottle 11:</b> {{ bottles.11 }} L</td>
+            </tr>
+            <tr>
+                <td><b>Bottle 12:</b> {{ bottles.12 }} L</td>
+                <td><b>Bottle 13:</b> {{ bottles.13 }} L</td>
+                <td><b>Bottle 14:</b> {{ bottles.14 }} L</td>
+                <td><b>Bottle 15:</b> {{ bottles.15 }} L</td>
+            </tr>-->
+        </table>
+        <button class="btn btn-info" data-toggle="modal" data-target="#seeBottles">See bottle setup</button>
+        <button class="btn btn-default" data-toggle="modal" data-target="#editBottles">Edit bottle setup</button>
+    {% else %}  <!--Empty bottles.txt, alert user-->
+        <p>Missing bottle setup. Please, <button class="btn btn-primary" data-toggle="modal" data-target="#editBottles" data-dismiss="modal">create a new one</button></p>
+    {% endif %}
 
-<p> Last dilution: {{ last_dilution }} </p>
+    <!-- seeBottles Modal -->
+    <div class="modal fade" id="seeBottles" tabindex="-1" role="dialog" aria-labelledby="seeBottlesLabel" aria-hidden="true">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="seeBottlesLabel">Current bottle setup</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <script type="text/javascript">
+                function editVol(check) {
+                    //check.parentElement.parentElement.input
+                    var vol = check.parentElement.parentElement.querySelectorAll('input[name$="volume"]')[0];
+                    console.log(vol);
+                    if (check.checked == true){
+                        vol.disabled = false;
+                    } else {
+                        vol.disabled = true;
+                    };
+                };
+            </script>
+
+            <form id="changeBottle" action="#" method="post">{% csrf_token %}
+                <table id="bottle-list-see" class="table">
+                    <tr>
+                        <th>Bottle #</th>
+                        <th>Vials</th>
+                        <th>Volume</th>
+                        <th>Last plugged</th>
+                        <th>To change</th>
+                    </tr>
+
+                    <!--Read and show bottles information-->
+                    {% for bot in bottle_info %}
+                        <tr>
+                            <td>{{ bot.0 }}</td>
+                            <td>{{ bot.1 }}</td>
+                            <td><input name="volume" type="text" size="3" maxlength="2" value="{{ bot.2 }}" disabled> L</td>
+                            <td>{{ bot.3 }}</td>
+                            <td><input name="change" type="checkbox" value="{{ forloop.counter0 }}" onclick="editVol(this)"></td>
+                        </tr>
+                    {% endfor %}
+                </table>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#editBottles" data-dismiss="modal">Edit bottle setup</button>
+            <input type="submit" class="btn btn-info" name="change-bottle" form="changeBottle" value="Change bottles">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- editBottles Modal -->
+    <div class="modal fade" id="editBottles" tabindex="-1" role="dialog" aria-labelledby="editBottlesLabel" aria-hidden="true">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="editBottlesLabel">Edit bottle setup</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">x</span>
+            </button>
+          </div>
+          <div class="modal-body">
+              <script  type="text/javascript">
+                function addBottle() {
+                    var table = document.getElementById("bottle-list");
+                    var row = table.insertRow(-1);
+                    var nrow = table.rows.length-2;
+                    //row.innerHTML = "<td>Bottle " + nrow +"</td><td><input  name='bottle[" + nrow + "][volume]' type='text'></input></td><td><input name='bottle[" + nrow + "][vials]' type='text'></input></td>";
+                    row.innerHTML = "<td>Bottle " + nrow +"</td><td><input  name='vials' type='text'></input></td><td><input name='volume' type='text'></input></td>";
+                }
+              </script>
+
+            <form id="saveBottleSetup" action="#" method="post">{% csrf_token %}
+                <table id="bottle-list" class="table">
+                    <tr>
+                        <th>Bottle #</th>
+                        <th>Vials</th>
+                        <th>Volume</th>
+                    </tr>
+                    <tr>
+                        <td>Bottle 0</td>
+                        <td><input name="vials" type='text'/></td>
+                        <td><input name="volume" type='text'/></td>
+                    </tr>
+                </table>
+
+                <button type="button" name="add-bottle" onclick="addBottle()">+</button>
+                <!--<input type="submit" name="save-bottle" onclick=""></input>-->
+            </form>
+            </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            <input type="submit" class="btn btn-primary" name="save-bottle" form="saveBottleSetup" value="Save changes"/>
+          </div>
+        </div>
+      </div>
+    </div>
 
 </div>
 
+</div>
 
 {% endblock%}

@@ -7,6 +7,7 @@ import numpy as np
 import itertools
 import os
 import time
+import pickle
 
 # Create your views here.
 def home(request):
@@ -94,6 +95,7 @@ def expt_name(request, experiment):
 
 	return render(request, "experiment.html", context)
 
+
 def dilutions(request, experiment):
 	sidebar_links, subdir_log = file_scan('expt')
 	vial_count = range(0, 16)
@@ -101,12 +103,61 @@ def dilutions(request, experiment):
 	rootdir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 	evolver_dir = os.path.join(rootdir, 'experiment')
 	pump_cal = os.path.join(evolver_dir, expt_subdir[0], "pump_cal.txt")
+	bottle_file = os.path.join(evolver_dir, expt_subdir[0], "bottles.txt")
+	expt_pickle = os.path.join(evolver_dir, expt_subdir[0], expt_dir[0], expt_dir[0] + ".pickle")
+
+	if not os.path.isfile(bottle_file):
+		open(bottle_file, 'w')
+
+	# Update bottle stuff
+	if request.POST.get('save-bottle'):
+		# Get time and data from request
+		timestamp = time.strftime("%d/%m/%Y %H:%M")
+		volume = request.POST.getlist("volume")
+		vials = request.POST.getlist("vials")
+
+		# Compile info of new bottle file
+		header = "# bottle\tvials\tvolume (L)\n"
+		for i in range(len(volume)):
+			header += f"bottle{i}\t{vials[i]}\t{volume[i]}\t{timestamp}\n"
+
+		# Backup previous configuration file
+		backup_tstamp = time.strftime("%Y%m%d_%H%M", time.localtime(os.path.getmtime(bottle_file)))
+		os.rename(bottle_file, os.path.join(evolver_dir, expt_subdir[0], "bottles_"+backup_tstamp+".txt"))
+
+		# Save new file
+		F = open(bottle_file, "w")
+		F.write(header)
+		F.close()
+
+	elif request.POST.get('change-bottle'):
+		# Get time and data from request
+		timestamp = time.strftime("%d/%m/%Y %H:%M")
+		change = request.POST.getlist("change")
+		change = [int(x) for x in change]
+		volume = request.POST.getlist("volume")
+
+		# Read bottle file and update data (without backup)
+		old_data = open(bottle_file).readlines()
+		new_data = old_data[0]
+		for c, data in enumerate(old_data[1:]):
+			# variable data has the shape "bottleID	vials	volume0	timestamp0 ... volumeN	timestampN"
+			if c in change:
+				new_vol = volume[change.index(c)]
+				new_data += data.strip('\n') + "\t" + new_vol + "\t" + timestamp + "\n"
+			else:
+				new_data += data
+
+		F = open(bottle_file, "w")
+		F.write(new_data)
+		F.close()
 
 	cal = np.genfromtxt(pump_cal, delimiter="\t")
 	diluted = []
 	efficiency = []
 	last = []
 
+	# Calculate total media consumption per vial
 	for vial in vial_count:
 		pump_dir = os.path.join(evolver_dir, expt_subdir[0], experiment, "pump_log", "vial{0}_pump_log.txt".format(vial))
 		ODset_dir = os.path.join(evolver_dir, expt_subdir[0], experiment, "ODset", "vial{0}_ODset.txt".format(vial))
@@ -139,12 +190,51 @@ def dilutions(request, experiment):
 		# All vials were chemostats or not used
 		efficiency = None
 
+	# Calculate consumption of last bottle
+	bottles = []
+	bottle_info = []  # Stores info displayed in "See bottle setup"
+	bottle_data = open(bottle_file).readlines()[1:]
+
+	# Get experiment start time
+	with open(expt_pickle, 'rb') as f:
+		expt_start = pickle.load(f)[0]
+
+	if not bottle_data:
+		bottle_info = None
+	else:
+		# bottleID	vials	volume0	timestamp0 ... volumeN	timestampN
+		for c, bot in enumerate(bottle_data):
+			# Extract data and store as lists for Django
+			bot = bot.strip("\n").split("\t")
+			bottle_info.append(bot[:2] + bot[-2:])   # ID	vials	volumeN	timestampN
+			# Sum media consumption of vials connected to each bottle
+			media = 0
+			for v in bot[1].split(","):
+				if v:
+					# get bottle timestamp
+					tstamp = time.mktime(time.strptime(bot[-1], "%d/%m/%Y %H:%M"))  # Timestamp in seconds since epoch
+					tstamp -= expt_start  # Timestamp in seconds since start of experiment
+					# get data slice from timestamp to present
+					pump_dir = os.path.join(evolver_dir, expt_subdir[0], experiment, "pump_log", f"vial{v}_pump_log.txt")
+					data = np.genfromtxt(pump_dir, delimiter=',', skip_header=2)
+					try:
+						bottle_consumption = sum(sum(data[np.where(data[:, 0] > tstamp), 1])) * cal[0, int(v)] / 1000
+					except IndexError:
+						bottle_consumption = -1  # Error when slicing the data
+				else:
+					bottle_consumption = -2  # Bottle has no vials assigned
+					# media += float(diluted[int(v)])  # Old way: sums all experiment consumption
+
+			bottles.append("%.2f / %sL" % (bottle_consumption, bot[-2]))
+
 	context = {
 	"sidebar_links": sidebar_links,
 	"experiment": experiment,
 	"vial_count": vial_count,
 	"diluted": diluted,
 	"efficiency": efficiency,
+	"bottle_info": bottle_info,
+	"bottles": bottles,
 	"last_dilution": last_dilution
 	}
 
