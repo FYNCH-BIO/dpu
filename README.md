@@ -6,12 +6,12 @@ The Data Processing Module (DPU) portion of the eVOLVER code are Python scripts 
 
 #### Mac
 ```sh
-python3.6 experiment/your_exptdir/main_eVOLVER.py
+python3.6 experiment/your_exptdir/eVOLVER.py
 ```
 
 #### Windows
 ```sh
-py experiment/your_exptdir/main_eVOLVER.py
+py experiment/your_exptdir/eVOLVER.py
 ```
 
 
