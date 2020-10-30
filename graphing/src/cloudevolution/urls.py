@@ -27,6 +27,8 @@ urlpatterns = [
 
     url(r'^(?P<experiment>\w+)/(?P<vial>[0-9]+)/$', 'cloudevolution.views.vial_num', name='vial_num'),
 
+    url(r'^(?P<experiment>\w+)/(dilutions)/$', 'cloudevolution.views.dilutions', name='dilutions'),
+
     url(r'^admin/', include(admin.site.urls)),
 ]
 

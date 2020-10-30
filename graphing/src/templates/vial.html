@@ -3,6 +3,7 @@
 
 {% block bokeh_script %}
 {{OD_script|safe}}
+{{grate_script|safe}}
 {{temp_script|safe}}
 {% endblock %}
 
@@ -19,10 +20,15 @@
 	<a href="{% url 'home' %}{{experiment}}/{{x}}" class="btn btn-default btn">{{x}}</a>
 	{% endfor %}
 
+    <a href="{% url 'home' %}{{experiment}}/dilutions" class="btn btn-default btn">Dilutions</a>
+
 </div>
 
 {{OD_div|safe}}
 <p> Last OD Value Recorded: {{last_OD_update}} </p>
+
+{{grate_div|safe}}
+<p> Last Growth Rate Value Calculated: {{last_grate_update}} </p>
 
 {{temp_div|safe}}
 <p> Last Temperature Value Recorded: {{last_temp_update}} </p>
