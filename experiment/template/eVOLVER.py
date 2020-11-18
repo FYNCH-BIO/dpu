@@ -482,6 +482,52 @@ class EvolverNamespace(BaseNamespace):
         text_file.write("{0},{1}\n".format(elapsed_time, slope))
         text_file.close()
 
+    def tail_to_np(self, path, window=10):
+        f = open(path, 'rb')
+        if window == 0:
+            return []
+
+        BUFSIZ = 1024
+        f.seek(0, 2)
+        remaining_bytes = f.tell()
+        size = window + 1
+        block = -1
+        data = []
+
+        while size > 0 and remaining_bytes > 0:
+            if remaining_bytes - BUFSIZ > 0:
+                # Seek back one whole BUFSIZ
+                f.seek(block * BUFSIZ, 2)
+                # read BUFFER
+                bunch = f.read(BUFSIZ)
+            else:
+                # file too small, start from beginning
+                f.seek(0, 0)
+                # only read what was not read
+                bunch = f.read(remaining_bytes)
+
+            bunch = bunch.decode('utf-8')
+            data.insert(0, bunch)
+            size -= bunch.count('\n')
+            remaining_bytes -= BUFSIZ
+            block -= 1
+
+        data = ''.join(data).splitlines()[-window:]
+
+        if len(data) < window:
+            # Not enough data
+            return np.asarray([])
+
+        for c, v in enumerate(data):
+            data[c] = v.split(',')
+
+        try:
+            data = np.asarray(data, dtype=np.float64)
+            return data
+        except ValueError:
+            # It is reading the header
+            return np.asarray([])
+
     def custom_functions(self, data, vials, elapsed_time):
         # load user script from custom_script.py
         if OPERATION_MODE == 'turbidostat':
