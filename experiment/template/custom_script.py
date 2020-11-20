@@ -82,7 +82,6 @@ def turbidostat(eVOLVER, input_data, vials, elapsed_time):
 
         file_name =  "vial{0}_OD.txt".format(x)
         OD_path = os.path.join(save_path, EXP_NAME, 'OD', file_name)
-        #data = np.genfromtxt(OD_path, delimiter=',')
         data = eVOLVER.tail_to_np(OD_path, OD_values_to_average)
         average_OD = 0
 
@@ -161,7 +160,6 @@ def chemostat(eVOLVER, input_data, vials, elapsed_time):
     # Note that script uses AND logic, so both start time and start OD must be surpassed
 
     OD_values_to_average = 6  # Number of values to calculate the OD average
-
     chemostat_vials = vials #vials is all 16, can set to different range (ex. [0,1,2,3]) to only trigger tstat on those vials
 
     rate_config = [0.5] * 16 #to set all vials to the same value, creates 16-value list
@@ -195,7 +193,6 @@ def chemostat(eVOLVER, input_data, vials, elapsed_time):
         #initialize OD and find OD path
         file_name =  "vial{0}_OD.txt".format(x)
         OD_path = os.path.join(save_path, EXP_NAME, 'OD', file_name)
-        #data = np.genfromtxt(OD_path, delimiter=',')
         data = eVOLVER.tail_to_np(OD_path, OD_values_to_average)
         average_OD = 0
         #enough_ODdata = (len(data) > 7) #logical, checks to see if enough data points (couple minutes) for sliding window

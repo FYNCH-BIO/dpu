@@ -487,19 +487,19 @@ class EvolverNamespace(BaseNamespace):
         if window == 0:
             return []
 
-        BUFSIZ = 1024
-        f.seek(0, 2)
+        BUFFER_SIZE = 1024
+        f.seek(0, os.SEEK_END)
         remaining_bytes = f.tell()
         size = window + 1
         block = -1
         data = []
 
         while size > 0 and remaining_bytes > 0:
-            if remaining_bytes - BUFSIZ > 0:
+            if remaining_bytes - BUFFER_SIZE > 0:
                 # Seek back one whole BUFSIZ
-                f.seek(block * BUFSIZ, 2)
+                f.seek(block * BUFFER_SIZE, 2)
                 # read BUFFER
-                bunch = f.read(BUFSIZ)
+                bunch = f.read(BUFFER_SIZE)
             else:
                 # file too small, start from beginning
                 f.seek(0, 0)
@@ -507,12 +507,12 @@ class EvolverNamespace(BaseNamespace):
                 bunch = f.read(remaining_bytes)
 
             bunch = bunch.decode('utf-8')
-            data.insert(0, bunch)
+            data.append(bunch)
             size -= bunch.count('\n')
-            remaining_bytes -= BUFSIZ
+            remaining_bytes -= BUFFER_SIZE
             block -= 1
 
-        data = ''.join(data).splitlines()[-window:]
+        data = ''.join(reversed(data)).splitlines()[-window:]
 
         if len(data) < window:
             # Not enough data
