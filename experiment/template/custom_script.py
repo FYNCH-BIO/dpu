@@ -39,6 +39,7 @@ def turbidostat(eVOLVER, input_data, vials, elapsed_time):
 
     turbidostat_vials = vials #vials is all 16, can set to different range (ex. [0,1,2,3]) to only trigger tstat on those vials
     stop_after_n_curves = np.inf #set to np.inf to never stop, or integer value to stop diluting after certain number of growth curves
+    OD_values_to_average = 6  # Number of values to calculate the OD average
 
     lower_thresh = [0.2] * len(vials) #to set all vials to the same value, creates 16-value list
     upper_thresh = [0.4] * len(vials) #to set all vials to the same value, creates 16-value list
@@ -81,18 +82,16 @@ def turbidostat(eVOLVER, input_data, vials, elapsed_time):
 
         file_name =  "vial{0}_OD.txt".format(x)
         OD_path = os.path.join(save_path, EXP_NAME, 'OD', file_name)
-        data = np.genfromtxt(OD_path, delimiter=',')
+        data = eVOLVER.tail_to_np(OD_path, OD_values_to_average)
         average_OD = 0
 
         # Determine whether turbidostat dilutions are needed
-        enough_ODdata = (len(data) > 7) #logical, checks to see if enough data points (couple minutes) for sliding window
+        #enough_ODdata = (len(data) > 7) #logical, checks to see if enough data points (couple minutes) for sliding window
         collecting_more_curves = (num_curves <= (stop_after_n_curves + 2)) #logical, checks to see if enough growth curves have happened
 
-        if enough_ODdata:
+        if data.size != 0:
             # Take median to avoid outlier
-            od_values_from_file = []
-            for n in range(1,7):
-                od_values_from_file.append(data[len(data)-n][1])
+            od_values_from_file = data[:,1]
             average_OD = float(np.median(od_values_from_file))
 
             #if recently exceeded upper threshold, note end of growth curve in ODset, allow dilutions to occur and growthrate to be measured
@@ -160,6 +159,7 @@ def chemostat(eVOLVER, input_data, vials, elapsed_time):
     start_time = 0 #hours, set 0 to start immediately
     # Note that script uses AND logic, so both start time and start OD must be surpassed
 
+    OD_values_to_average = 6  # Number of values to calculate the OD average
     chemostat_vials = vials #vials is all 16, can set to different range (ex. [0,1,2,3]) to only trigger tstat on those vials
 
     rate_config = [0.5] * 16 #to set all vials to the same value, creates 16-value list
@@ -193,16 +193,14 @@ def chemostat(eVOLVER, input_data, vials, elapsed_time):
         #initialize OD and find OD path
         file_name =  "vial{0}_OD.txt".format(x)
         OD_path = os.path.join(save_path, EXP_NAME, 'OD', file_name)
-        data = np.genfromtxt(OD_path, delimiter=',')
+        data = eVOLVER.tail_to_np(OD_path, OD_values_to_average)
         average_OD = 0
-        enough_ODdata = (len(data) > 7) #logical, checks to see if enough data points (couple minutes) for sliding window
+        #enough_ODdata = (len(data) > 7) #logical, checks to see if enough data points (couple minutes) for sliding window
 
-        if enough_ODdata: #waits for seven OD measurements (couple minutes) for sliding window
+        if data.size != 0: #waits for seven OD measurements (couple minutes) for sliding window
 
             #calculate median OD
-            od_values_from_file = []
-            for n in range(1, 7):
-                od_values_from_file.append(data[len(data)-n][1])
+            od_values_from_file = data[:,1]
             average_OD = float(np.median(od_values_from_file))
 
             # set chemostat config path and pull current state from file
