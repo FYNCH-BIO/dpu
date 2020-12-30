@@ -40,6 +40,7 @@ class EvolverNamespace(BaseNamespace):
     start_time = None
     use_blank = False
     OD_initial = None
+    start_countdown = 7
 
     def on_connect(self, *args):
         print("Connected to eVOLVER as client")
@@ -58,6 +59,10 @@ class EvolverNamespace(BaseNamespace):
         elapsed_time = round((time.time() - self.start_time) / 3600, 4)
         logger.debug('elapsed time: %.4f hours' % elapsed_time)
         print("{0}: {1} Hours".format(EXP_NAME, elapsed_time))
+
+        if self.start_countdown > 0:
+            self.start_countdown -= 1
+
         # are the calibrations in yet?
         if not self.check_for_calibrations():
             logger.warning('calibration files still missing, skipping custom '
@@ -97,8 +102,11 @@ class EvolverNamespace(BaseNamespace):
         for param in temp_cal['params']:
             self.save_data(data['data'].get(param, []), elapsed_time,
                         VIALS, param + '_raw')
-        # run custom functions
-        self.custom_functions(data, VIALS, elapsed_time)
+        if self.start_countdown <= 0:
+            # run custom functions
+            self.custom_functions(data, VIALS, elapsed_time)
+        else:
+            logger.info("Waiting for start countdown")
         # save variables
         self.save_variables(self.start_time, self.OD_initial)
 
@@ -611,6 +619,7 @@ if __name__ == '__main__':
                             filename=options.log_name,
                             level=level)
 
+    EVOLVER_NS.start_countdown = 7
     reset_connection_timer = time.time()
     while True:
         try:
@@ -639,6 +648,7 @@ if __name__ == '__main__':
                     # no need to have something like "restart_chemo" here
                     # with the new server logic
                     socketIO.connect()
+                    EVOLVER_NS.start_countdown = 7
                     break
             except KeyboardInterrupt:
                 print('Second Ctrl-C detected, shutting down')
