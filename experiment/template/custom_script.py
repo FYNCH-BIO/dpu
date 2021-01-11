@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 ##### USER DEFINED GENERAL SETTINGS #####
 
 #set new name for each experiment, otherwise files will be overwritten
-EXP_NAME = 'test_expt'
+EXP_NAME = 'data'
 EVOLVER_IP = '192.168.1.2'
 EVOLVER_PORT = 8081
 
@@ -43,6 +43,10 @@ def turbidostat(eVOLVER, input_data, vials, elapsed_time):
 
     lower_thresh = [0.2] * len(vials) #to set all vials to the same value, creates 16-value list
     upper_thresh = [0.4] * len(vials) #to set all vials to the same value, creates 16-value list
+
+    if eVOLVER.experiment_params is not None:
+        lower_thresh = list(map(lambda x: x['lower'], eVOLVER.experiment_params['vial_configuration']))
+        upper_thresh = list(map(lambda x: x['upper'], eVOLVER.experiment_params['vial_configuration']))
 
     #Alternatively, use 16 value list to set different thresholds, use 9999 for vials not being used
     #lower_thresh = [0.2, 0.2, 0.3, 0.3, 9999, 9999, 9999, 9999, 9999, 9999, 9999, 9999, 9999, 9999, 9999, 9999]
