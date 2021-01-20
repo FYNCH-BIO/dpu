@@ -100,8 +100,12 @@ def linear_fit(calibration, fit_name, params, graph = True):
     return create_fit(coefficients, fit_name, "linear", time.time(), params)
 
 def constant_fit(calibration, fit_name, params):
-    calibration_data = process_vial_data(calibration, param = params[0]).values()[0]
+    calibration_data = list(process_vial_data(calibration, param = params[0]).values())[0]
     measured_data = calibration_data["measured_data"]
+    coefficients = []
+    for i in range(len(measured_data)):
+        coefficients.append(calibration_data['medians'][i][0]/measured_data[i])
+    print(coefficients)
     return create_fit(coefficients, fit_name, "constant", time.time(), params)
 
 def three_dimension_fit(calibration, fit_name, params, graph = True):
@@ -299,7 +303,7 @@ if __name__ == '__main__':
         elif fit_type == "linear":
             fit = linear_fit(calibration, fit_name, params)
         elif fit_type == "constant":
-            fit = constant_fit(calibration, params)
+            fit = constant_fit(calibration, fit_name, params)
         elif fit_type == "3d":
             fit = three_dimension_fit(calibration, fit_name, params)
 
