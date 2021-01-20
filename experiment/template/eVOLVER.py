@@ -15,7 +15,7 @@ from socketIO_client import SocketIO, BaseNamespace
 from nbstreamreader import NonBlockingStreamReader as NBSR
 
 import custom_script
-from custom_script import EXP_NAME, PUMP_CAL_FILE
+from custom_script import EXP_NAME
 from custom_script import EVOLVER_IP, EVOLVER_PORT, OPERATION_MODE
 from custom_script import STIR_INITIAL, TEMP_INITIAL
 
@@ -28,6 +28,7 @@ SAVE_PATH = os.path.dirname(os.path.realpath(__file__))
 EXP_DIR = os.path.join(SAVE_PATH, 'data')
 OD_CAL_PATH = os.path.join(SAVE_PATH, 'od_cal.json')
 TEMP_CAL_PATH = os.path.join(SAVE_PATH, 'temp_cal.json')
+PUMP_CAL_PATH = os.path.join(SAVE_PATH, 'pump_cal.json')
 JSON_PARAMS_FILE = os.path.join(SAVE_PATH, 'eVOLVER_parameters.json')
 
 SIGMOID = 'sigmoid'
@@ -114,6 +115,8 @@ class EvolverNamespace(BaseNamespace):
                 file_path = OD_CAL_PATH
             elif calibration['calibrationType'] == 'temperature':
                 file_path = TEMP_CAL_PATH
+            elif calibration['calibrationType'] == 'pump':
+                file_path = PUMP_CAL_PATH
             else:
                 continue
             for fit in calibration['fits']:
@@ -122,7 +125,7 @@ class EvolverNamespace(BaseNamespace):
                         json.dump(fit, f)
                     # Create raw data directories and files for params needed
                     for param in fit['params']:
-                        if not os.path.isdir(os.path.join(EXP_DIR, param + '_raw')):
+                        if not os.path.isdir(os.path.join(EXP_DIR, param + '_raw')) and param is not 'pump':
                             os.makedirs(os.path.join(EXP_DIR, param + '_raw'))
                             for x in range(len(fit['coefficients'])):
                                 exp_str = "Experiment: {0} vial {1}, {2}".format(EXP_NAME,
@@ -430,7 +433,7 @@ class EvolverNamespace(BaseNamespace):
 
     def check_for_calibrations(self):
         result = True
-        if not os.path.exists(OD_CAL_PATH) or not os.path.exists(TEMP_CAL_PATH):
+        if not os.path.exists(OD_CAL_PATH) or not os.path.exists(TEMP_CAL_PATH) or not os.path.exists(PUMP_CAL_PATH):
             # log and request again
             logger.warning('Calibrations not received yet, requesting again')
             self.request_calibrations()
@@ -457,14 +460,10 @@ class EvolverNamespace(BaseNamespace):
             pickle.dump([start_time, OD_initial], f)
 
     def get_flow_rate(self):
-        file_path = os.path.join(SAVE_PATH, PUMP_CAL_FILE)
-        flow_calibration = np.loadtxt(file_path, delimiter="\t")
-        if len(flow_calibration) == 16:
-            flow_rate = flow_calibration
-        else:
-            # Currently just implementing influx flow rate
-            flow_rate = flow_calibration[0,:]
-        return flow_rate
+        pump_cal = None
+        with open(PUMP_CAL_PATH) as f:
+            pump_cal = json.load(f)
+        return pump_cal['coefficients']
 
     def calc_growth_rate(self, vial, gr_start, elapsed_time):
         ODfile_name =  "vial{0}_OD.txt".format(vial)
