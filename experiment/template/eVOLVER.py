@@ -314,14 +314,14 @@ class EvolverNamespace(BaseNamespace):
             text_file.write(default + '\n')
         text_file.close()
 
-    def initialize_exp(self, vials, experiment_params, always_yes = False):
+    def initialize_exp(self, vials, experiment_params, always_yes = False, exp_recover = False):
         self.experiment_params = experiment_params
         logger.debug('initializing experiment')
 
         if os.path.exists(EXP_DIR):
             logger.info('found an existing experiment')
             exp_continue = None
-            if always_yes:
+            if always_yes | exp_recover:
                 exp_continue = 'y'
             else:
                 while exp_continue not in ['y', 'n']:
@@ -576,6 +576,11 @@ def get_options():
                              '(i.e. continues from existing experiment, '
                              'overwrites existing data and blanks OD '
                              'measurements)')
+    parser.add_argument('--exp-recover', action='store_true',
+                        default=False,
+                        help='Continues experiment without overwriting information'
+                             '(i.e. continues experiment without overwriting)'
+                             ' existing data or blank measurements')
     parser.add_argument('--log-name',
                         default=os.path.join(EXP_DIR, 'evolver.log'),
                         help='Log file name directory (default: %(default)s)')
@@ -613,10 +618,11 @@ if __name__ == '__main__':
     EVOLVER_NS.start_time = EVOLVER_NS.initialize_exp(VIALS,
                                                       experiment_params,
                                                       options.always_yes,
+                                                      options.exp_recover
                                                       )
 
     # Using a non-blocking stream reader to be able to listen
-    # for commands from the electron app. 
+    # for commands from the electron app.
     nbsr = NBSR(sys.stdin)
     paused = False
 
@@ -635,7 +641,7 @@ if __name__ == '__main__':
                             level=level)
 
     reset_connection_timer = time.time()
-    while True:        
+    while True:
         try:
             # infinite loop
 
@@ -647,7 +653,7 @@ if __name__ == '__main__':
                 paused = True
                 EVOLVER_NS.stop_exp()
                 socketIO.disconnect()
-                
+
             if 'continue-script' in message:
                 print('Restarting experiment', flush = True)
                 paused = False
