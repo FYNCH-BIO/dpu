@@ -179,6 +179,7 @@ def graph_3d_data(func, datas, coefficients, fit_name):
         ax.set_xlabel('OD90') # X axis data label
         ax.set_ylabel('OD135') # Y axis data label
         ax.set_zlabel('OD Measured') # Z axis data label
+        ax.set_title('Vial: ' + str(i))  # Subplot title
 
     plt.show()
 
