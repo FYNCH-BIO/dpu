@@ -60,9 +60,9 @@ class EvolverNamespace(BaseNamespace):
         logger.info("reconnected to eVOLVER as client")
 
     def on_broadcast(self, data):
-        logger.debug('broadcast received')
+        logger.info('broadcast received')
         elapsed_time = round((time.time() - self.start_time) / 3600, 4)
-        logger.debug('elapsed time: %.4f hours' % elapsed_time)
+        logger.info('elapsed time: %.4f hours' % elapsed_time)
         print("{0}: {1} Hours".format(EXP_NAME, elapsed_time))
         # are the calibrations in yet?
         if not self.check_for_calibrations():
@@ -110,6 +110,7 @@ class EvolverNamespace(BaseNamespace):
 
     def on_activecalibrations(self, data):
         print('Calibrations recieved')
+        logger.info('Calibrations recieved')
         for calibration in data:
             if calibration['calibrationType'] == 'od':
                 file_path = OD_CAL_PATH
@@ -566,6 +567,20 @@ class EvolverNamespace(BaseNamespace):
     def stop_exp(self):
         self.stop_all_pumps()
 
+def setup_logging(filename, quiet, verbose):
+    if quiet:
+        logging.basicConfig(level=logging.CRITICAL + 10)
+    else:
+        if verbose == 0:
+            level = logging.INFO
+        elif verbose >= 1:
+            level = logging.DEBUG
+        logging.basicConfig(format='%(asctime)s - %(name)s - [%(levelname)s] '
+                            '- %(message)s',
+                            datefmt='%Y-%m-%d %H:%M:%S',
+                            filename=filename,
+                            level=level)
+
 def get_options():
     description = 'Run an eVOLVER experiment from the command line'
     parser = argparse.ArgumentParser(description=description)
@@ -593,11 +608,10 @@ def get_options():
 if __name__ == '__main__':
     options = get_options()
 
+    setup_logging(options.log_name, options.quiet, options.verbose)
+
     #changes terminal tab title in OSX
     print('\x1B]0;eVOLVER EXPERIMENT: PRESS Ctrl-C TO PAUSE\x07')
-
-    # silence logging until experiment is initialized
-    logging.level = logging.CRITICAL + 10
 
     experiment_params = None
     if os.path.exists(JSON_PARAMS_FILE):
@@ -621,18 +635,6 @@ if __name__ == '__main__':
     paused = False
 
     # logging setup
-    if options.quiet:
-        logging.basicConfig(level=logging.CRITICAL + 10)
-    else:
-        if options.verbose == 0:
-            level = logging.INFO
-        elif options.verbose >= 1:
-            level = logging.DEBUG
-        logging.basicConfig(format='%(asctime)s - %(name)s - [%(levelname)s] '
-                            '- %(message)s',
-                            datefmt='%Y-%m-%d %H:%M:%S',
-                            filename=options.log_name,
-                            level=level)
 
     reset_connection_timer = time.time()
     while True:        
@@ -650,6 +652,7 @@ if __name__ == '__main__':
                 
             if 'continue-script' in message:
                 print('Restarting experiment', flush = True)
+                logger.info('Restarting experiment')
                 paused = False
                 socketIO.connect()
 
