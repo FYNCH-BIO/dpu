@@ -250,3 +250,4 @@ def chemostat(eVOLVER, input_data, vials, elapsed_time):
 
 if __name__ == '__main__':
     print('Please run eVOLVER.py instead')
+    logger.info('Please run eVOLVER.py instead')
