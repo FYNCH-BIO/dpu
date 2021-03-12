@@ -315,11 +315,12 @@ class EvolverNamespace(BaseNamespace):
             text_file.write(default + '\n')
         text_file.close()
 
-    def initialize_exp(self, vials, experiment_params, always_yes = False):
+    def initialize_exp(self, vials, experiment_params, log_name, quiet, verbose, always_yes = False):
         self.experiment_params = experiment_params
         logger.debug('initializing experiment')
 
         if os.path.exists(EXP_DIR):
+            setup_logging(log_name, quiet, verbose)
             logger.info('found an existing experiment')
             exp_continue = None
             if always_yes:
@@ -361,6 +362,7 @@ class EvolverNamespace(BaseNamespace):
             os.makedirs(os.path.join(EXP_DIR, 'ODset'))
             os.makedirs(os.path.join(EXP_DIR, 'growthrate'))
             os.makedirs(os.path.join(EXP_DIR, 'chemo_config'))
+            setup_logging(log_name, quiet, verbose)
             for x in vials:
                 exp_str = "Experiment: {0} vial {1}, {2}".format(EXP_NAME,
                                                                  x,
@@ -608,8 +610,6 @@ def get_options():
 if __name__ == '__main__':
     options = get_options()
 
-    setup_logging(options.log_name, options.quiet, options.verbose)
-
     #changes terminal tab title in OSX
     print('\x1B]0;eVOLVER EXPERIMENT: PRESS Ctrl-C TO PAUSE\x07')
 
@@ -626,7 +626,10 @@ if __name__ == '__main__':
     #
     EVOLVER_NS.start_time = EVOLVER_NS.initialize_exp(VIALS,
                                                       experiment_params,
-                                                      options.always_yes,
+                                                      options.log_name,
+                                                      options.quiet,
+                                                      options.verbose,
+                                                      options.always_yes
                                                       )
 
     # Using a non-blocking stream reader to be able to listen

@@ -155,7 +155,7 @@ def turbidostat(eVOLVER, input_data, vials, elapsed_time):
     # end of turbidostat() fxn
 
 def chemostat(eVOLVER, input_data, vials, elapsed_time):
-    OD_data = input_data['transformed']['od_90']
+    OD_data = input_data['transformed']['od']
 
     ##### USER DEFINED VARIABLES #####
     start_OD = 0 # ~OD600, set to 0 to start chemostate dilutions at any positive OD
