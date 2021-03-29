@@ -6,7 +6,7 @@ The Data Processing Module (DPU) portion of the eVOLVER code are Python scripts 
 
 #### Mac
 ```sh
-python3.6 experiment/your_exptdir/eVOLVER.py
+python3 experiment/your_exptdir/eVOLVER.py
 ```
 
 #### Windows
@@ -21,7 +21,7 @@ NOTE: Experiment name must have 'expt' to get properly graphed.
 
 #### Mac
 ```sh
-python3.6 graphing/src/manage.py runserver
+python3 graphing/src/manage.py runserver
 ```
 #### Windows
 ```sh
@@ -38,14 +38,20 @@ See plots locally on http://127.0.0.1:8000
 
 #### Mac
 
-#### Install Homebrew and Python 3.6
+#### Install Homebrew and Latest Version of Python3
 
 ```sh
 /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 ```
 
+Check current version of python3 on computer running DPU.
 ```sh
-brew install --ignore-dependencies https://raw.githubusercontent.com/Homebrew/homebrew-core/f2a764ef944b1080be64bd88dca9a1d80130c558/Formula/python.rb
+python3 --version
+```
+
+Install latest version of python3.
+```sh
+brew install python3
 ```
 
 ```sh
@@ -64,7 +70,7 @@ Install from https://www.python.org/downloads/release/python-368/
 
 #### Mac
 ```sh
-python3.6 setup.py install
+python3 setup.py install
 ```
 
 #### Windows
@@ -76,36 +82,34 @@ py setup.py install
 
 ## Run calibration code (after the raw values have been logged on the eVOLVER)
 
-### List raw calibration files on eVOLVER 
+### List raw calibration files on eVOLVER
 
 #### Mac
 ```sh
-python3.6 calibration/calibrate.py -a <ip_address> -g
+python3 calibration/calibrate.py -a <ip_address> -g
 ```
 
-For Windows, use py instead of python3.6 for all commands.
+For Windows, use py instead of python3 for all commands.
 
 ### Calibrate Temperature
 
 ```sh
-python3.6 calibration/calibrate.py -a <ip_address> -n <file_name> -t linear -f <name_after_fit> -p temp
+python3 calibration/calibrate.py -a <ip_address> -n <file_name> -t linear -f <name_after_fit> -p temp
 ```
 
-### List raw OD JSON files logged on evolver 
+### List raw OD JSON files logged on evolver
 
 #### OD135
 ```sh
-python3.6 calibration/calibrate.py -a <ip_address> -n <file_name> -t sigmoid -f <name_after_fit> -p od_135
+python3 calibration/calibrate.py -a <ip_address> -n <file_name> -t sigmoid -f <name_after_fit> -p od_135
 ```
 
 #### OD90 (Check to ensure mode is configured properly)
 ```sh
-python3.6 calibration/calibrate.py -a <ip_address> -n <file_name> -t sigmoid -f <name_after_fit> -p od_90
+python3 calibration/calibrate.py -a <ip_address> -n <file_name> -t sigmoid -f <name_after_fit> -p od_90
 ```
 
 #### 3D FIT (Check to ensure mode is configured properly)
 ```sh
-python3.6 calibration/calibrate.py -a <ip_address> -n <file_name> -t 3d -f <name_after_fit> -p od_90,od_135
+python3 calibration/calibrate.py -a <ip_address> -n <file_name> -t 3d -f <name_after_fit> -p od_90,od_135
 ```
-
-
