@@ -15,6 +15,7 @@ from matplotlib import cm
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 
 VALID_FIT_TYPES = ['sigmoid', 'linear', 'constant', '3d']
+HT_EVOLVER_TS_INDEXES = [[0,1,4,5],[2,3,6,7],[8,9,12,13],[10,11,14,15]]
 
 data_received = False
 calibration = None
@@ -68,35 +69,59 @@ def sigmoid_fit(calibration, fit_name, params, graph = True):
     medians = calibration_data["medians"]
     standard_deviations = calibration_data["standard_deviations"]
     measured_data = calibration_data["measured_data"]
+    quads_measured_data_avg = []
+    quads_medians_avg = []
+    quads_standard_deviations_avg = []
 
-    for i in range(16):
-        paramsig, paramlin = curve_fit(sigmoid, measured_data[i], medians[i], p0 = [62721, 62721, 0, -1], maxfev=1000000000)
+
+    for i in range(4):
+        indexes = HT_EVOLVER_TS_INDEXES[i]
+        quad_medians = [medians[indexes[0]], medians[indexes[1]], medians[indexes[2]], medians[indexes[3]]]
+        quad_standard_deviations = [standard_deviations[indexes[0]], standard_deviations[indexes[1]], standard_deviations[indexes[2]], standard_deviations[indexes[3]]]
+        quad_measured_data = []
+
+        for j in range(18):
+            quad_measured_data.append(measured_data[j+i*18])
+
+        quads_medians_avg.append([sum(x) / len(x) for x in zip(*quad_medians)])
+        quads_measured_data_avg.append([sum(x) / len(x) for x in zip(*quad_measured_data)])
+        quads_standard_deviations_avg.append([sum(x) / len(x) for x in zip(*quad_standard_deviations)])
+
+        paramsig, paramlin = curve_fit(sigmoid, quads_measured_data_avg[i], quads_medians_avg[i], p0 = [62721, 62721, 0, -1], maxfev=1000000000)
         coefficients.append(np.array(paramsig).tolist())
-    print(coefficients)
 
     if graph:
-        graph_2d_data(sigmoid, measured_data, medians, standard_deviations, coefficients, fit_name, 'sigmoid', 0, max([max(sublist) for sublist in measured_data]), 500)
+        graph_2d_data(sigmoid, quads_measured_data_avg, quads_medians_avg, quads_standard_deviations_avg, coefficients, fit_name, 'sigmoid', 0, max([max(sublist) for sublist in measured_data]), 500)
     return create_fit(coefficients, fit_name, "sigmoid", time.time(), params)
 
 def linear_fit(calibration, fit_name, params, graph = True):
     coefficients = []
 
     # For single param calibrations, just take the first value from the returned dictionary
-    print(calibration)
     calibration_data = list(process_vial_data(calibration, param = params[0]).values())[0]
     medians = calibration_data["medians"]
     standard_deviations = calibration_data["standard_deviations"]
     measured_data = calibration_data["measured_data"]
+    quads_measured_data_avg = []
+    quads_medians_avg = []
+    quads_standard_deviations_avg = []
 
-    for i in range(16):
-        print(measured_data[i])
-        print(medians[i])
-        paramlin, cov = curve_fit(linear, medians[i], measured_data[i])
+    for i in range(4):
+        indexes = HT_EVOLVER_TS_INDEXES[i]
+        quad_medians = [medians[indexes[0]], medians[indexes[1]], medians[indexes[2]], medians[indexes[3]]]
+        quad_standard_deviations = [standard_deviations[indexes[0]], standard_deviations[indexes[1]], standard_deviations[indexes[2]], standard_deviations[indexes[3]]]
+        quad_measured_data = []
+        for j in range(18):
+            quad_measured_data.append(measured_data[j+i*18])
+
+        quads_medians_avg.append([sum(x) / len(x) for x in zip(*quad_medians)])
+        quads_measured_data_avg.append([sum(x) / len(x) for x in zip(*quad_measured_data)])
+        quads_standard_deviations_avg.append([sum(x) / len(x) for x in zip(*quad_standard_deviations)])
+        paramlin, cov = curve_fit(linear, quads_medians_avg[i], quads_measured_data_avg[i])
         coefficients.append(paramlin.tolist())
 
     if graph:
-        graph_2d_data(linear, medians, measured_data, standard_deviations, coefficients, fit_name, 'linear', 500, 3000, 50)
-
+        graph_2d_data(linear, quads_medians_avg, quads_measured_data_avg, quads_standard_deviations_avg, coefficients, fit_name, 'linear', 500, 3000, 50)
     return create_fit(coefficients, fit_name, "linear", time.time(), params)
 
 def constant_fit(calibration, fit_name, params):
@@ -151,14 +176,14 @@ def three_dimension_fit(calibration, fit_name, params, graph = True):
 
 def graph_2d_data(func, measured_data, medians, standard_deviations, coefficients, fit_name, fit_type, space_min, space_max, space_step):
     linear_space = np.linspace(space_min, space_max, space_step)
-    fig, ax = plt.subplots(4, 4)
+    fig, ax = plt.subplots(1, 4)
     fig.suptitle("Fit Name: " + fit_name)
-    for i in range(16):
-        ax[i // 4, (i % 4)].plot(measured_data[i], medians[i], 'o', markersize=3, color='black')
-        ax[i //4, (i % 4)].errorbar(measured_data[i], medians[i], yerr=standard_deviations[i], fmt='none')
-        ax[i // 4, (i % 4)].plot(linear_space, func(linear_space, *coefficients[i]), markersize = 1.5, label = None)
-        ax[i // 4, (i % 4)].set_title('Vial: ' + str(i))
-        ax[i // 4, (i % 4)].ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+    for i in range(4):
+        ax[(i % 4)].plot(measured_data[i], medians[i], 'o', markersize=3, color='black')
+        ax[(i % 4)].errorbar(measured_data[i], medians[i], yerr=standard_deviations[i], fmt='none')
+        ax[(i % 4)].plot(linear_space, func(linear_space, *coefficients[i]), markersize = 1.5, label = None)
+        ax[(i % 4)].set_title('Smart Quad: ' + str(i))
+        ax[(i % 4)].ticklabel_format(style='sci', axis='y', scilimits=(0,0))
     plt.subplots_adjust(hspace = 0.6)
     plt.show()
 
