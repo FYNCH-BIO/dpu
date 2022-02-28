@@ -62,66 +62,43 @@ def three_dim(data, c0, c1, c2, c3, c4, c5):
     return c0 + c1*x + c2*y + c3*x**2 + c4*x*y + c5*y**2
 
 def sigmoid_fit(calibration, fit_name, params, graph = True):
-    coefficients = []
+    coefficients = [[],[],[],[]]
 
     # For single param calibrations, just take the first value from the returned dictionary
-    calibration_data = list(process_vial_data(calibration, param = params[0]).values())[0]
-    medians = calibration_data["medians"]
-    standard_deviations = calibration_data["standard_deviations"]
-    measured_data = calibration_data["measured_data"]
-    quads_measured_data_avg = []
-    quads_medians_avg = []
-    quads_standard_deviations_avg = []
-
-
     for i in range(4):
-        indexes = HT_EVOLVER_TS_INDEXES[i]
-        quad_medians = [medians[indexes[0]], medians[indexes[1]], medians[indexes[2]], medians[indexes[3]]]
-        quad_standard_deviations = [standard_deviations[indexes[0]], standard_deviations[indexes[1]], standard_deviations[indexes[2]], standard_deviations[indexes[3]]]
-        quad_measured_data = []
+        calibration_data = list(process_vial_data(calibration[i], param = params[0]).values())[0]
+        medians = calibration_data["medians"]
+        standard_deviations = calibration_data["standard_deviations"]
+        measured_data = calibration_data["measured_data"]
 
         for j in range(18):
-            quad_measured_data.append(measured_data[j+i*18])
-
-        quads_medians_avg.append([sum(x) / len(x) for x in zip(*quad_medians)])
-        quads_measured_data_avg.append([sum(x) / len(x) for x in zip(*quad_measured_data)])
-        quads_standard_deviations_avg.append([sum(x) / len(x) for x in zip(*quad_standard_deviations)])
-
-        paramsig, paramlin = curve_fit(sigmoid, quads_measured_data_avg[i], quads_medians_avg[i], p0 = [62721, 62721, 0, -1], maxfev=1000000000)
-        coefficients.append(np.array(paramsig).tolist())
+            paramsig, paramlin = curve_fit(sigmoid, measured_data[j], medians[j], p0 = [62721, 62721, 0, -1], maxfev=1000000000)
+            coefficients[i].append(np.array(paramsig).tolist())
+        print(coefficients)
 
     if graph:
-        graph_2d_data(sigmoid, quads_measured_data_avg, quads_medians_avg, quads_standard_deviations_avg, coefficients, fit_name, 'sigmoid', 0, max([max(sublist) for sublist in measured_data]), 500)
+        graph_2d_data(sigmoid, measured_data, medians, standard_deviations, coefficients, fit_name, 'sigmoid', 0, max([max(sublist) for sublist in measured_data]), 500)
     return create_fit(coefficients, fit_name, "sigmoid", time.time(), params)
 
 def linear_fit(calibration, fit_name, params, graph = True):
-    coefficients = []
+     coefficients = [[],[],[],[]]
 
     # For single param calibrations, just take the first value from the returned dictionary
+    print(calibration)
     calibration_data = list(process_vial_data(calibration, param = params[0]).values())[0]
     medians = calibration_data["medians"]
     standard_deviations = calibration_data["standard_deviations"]
     measured_data = calibration_data["measured_data"]
-    quads_measured_data_avg = []
-    quads_medians_avg = []
-    quads_standard_deviations_avg = []
 
-    for i in range(4):
-        indexes = HT_EVOLVER_TS_INDEXES[i]
-        quad_medians = [medians[indexes[0]], medians[indexes[1]], medians[indexes[2]], medians[indexes[3]]]
-        quad_standard_deviations = [standard_deviations[indexes[0]], standard_deviations[indexes[1]], standard_deviations[indexes[2]], standard_deviations[indexes[3]]]
-        quad_measured_data = []
-        for j in range(18):
-            quad_measured_data.append(measured_data[j+i*18])
-
-        quads_medians_avg.append([sum(x) / len(x) for x in zip(*quad_medians)])
-        quads_measured_data_avg.append([sum(x) / len(x) for x in zip(*quad_measured_data)])
-        quads_standard_deviations_avg.append([sum(x) / len(x) for x in zip(*quad_standard_deviations)])
-        paramlin, cov = curve_fit(linear, quads_medians_avg[i], quads_measured_data_avg[i])
+    for i in range(16):
+        print(measured_data[i])
+        print(medians[i])
+        paramlin, cov = curve_fit(linear, medians[i], measured_data[i])
         coefficients.append(paramlin.tolist())
 
     if graph:
-        graph_2d_data(linear, quads_medians_avg, quads_measured_data_avg, quads_standard_deviations_avg, coefficients, fit_name, 'linear', 500, 3000, 50)
+        graph_2d_data(linear, medians, measured_data, standard_deviations, coefficients, fit_name, 'linear', 500, 3000, 50)
+
     return create_fit(coefficients, fit_name, "linear", time.time(), params)
 
 def constant_fit(calibration, fit_name, params):
@@ -228,26 +205,28 @@ def process_vial_data(calibration, param = None):
         print("Error processing calibration data - no raw sets found")
         sys.exit(1)
 
-    calibration_data = {}
-    vial_datas = []
-    names = []
-    for raw_set in raw_sets:
-        if param is None or raw_set.get("param") == param:
-            vial_datas.append(raw_set["vialData"])
-            names.append(raw_set.get("param"))
+    calibration_data = [{},{},{},{}]
+    vial_datas = [[],[],[],[]]
+    names = [[],[],[],[]]
+    for i in range(4):
+        for raw_set in raw_sets[i]:
+            if param is None or raw_set.get("param") == param:
+                vial_datas[i].append(raw_set["vialData"])
+                names[i].append(raw_set.get("param"))
 
-    for i, vial_data in enumerate(vial_datas):
-        medians = []
-        standard_deviations = []
-        for vial in vial_data:
-            point_medians = []
-            point_standard_deviations = []
-            for point in vial:
-                point_medians.append(np.median(point))
-                point_standard_deviations.append(np.std(point))
-            medians.append(point_medians)
-            standard_deviations.append(point_standard_deviations)
-        calibration_data[names[i]] = {"medians": medians, "standard_deviations": standard_deviations, "measured_data": calibration["measuredData"]}
+    for i in range(4):
+        for j, vial_data in enumerate(vial_datas[i]):
+            medians = []
+            standard_deviations = []
+            for vial in vial_data:
+                point_medians = []
+                point_standard_deviations = []
+                for point in vial:
+                    point_medians.append(np.median(point))
+                    point_standard_deviations.append(np.std(point))
+                medians.append(point_medians)
+                standard_deviations.append(point_standard_deviations)
+            calibration_data[i][names[i][j]] = {"medians": medians, "standard_deviations": standard_deviations, "measured_data": calibration["measuredData"]}
 
     return calibration_data
 
