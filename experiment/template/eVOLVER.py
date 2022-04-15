@@ -126,7 +126,7 @@ class EvolverNamespace(BaseNamespace):
                         json.dump(fit, f)
                     # Create raw data directories and files for params needed
                     for param in fit['params']:
-                        if not os.path.isdir(os.path.join(EXP_DIR, param + '_raw')) and param is not 'pump':
+                        if not os.path.isdir(os.path.join(EXP_DIR, param + '_raw')) and param != 'pump':
                             os.makedirs(os.path.join(EXP_DIR, param + '_raw'))
                             for x in range(len(fit['coefficients'])):
                                 exp_str = "Experiment: {0} vial {1}, {2}".format(EXP_NAME,
@@ -238,7 +238,7 @@ class EvolverNamespace(BaseNamespace):
             # report if actual temperature doesn't match
             delta_t = np.abs(temps - temp_data).max()
             if delta_t > 0.2:
-                logger.info('actual temperature doesn\'t match configuration '
+                logger.debug('actual temperature doesn\'t match configuration '
                             '(yet? max deltaT is %.2f)' % delta_t)
                 logger.debug('temperature config: %s' % temps)
                 logger.debug('actual temperatures: %s' % temp_data)
@@ -317,7 +317,7 @@ class EvolverNamespace(BaseNamespace):
 
     def initialize_exp(self, vials, experiment_params, log_name, quiet, verbose, always_yes = False):
         self.experiment_params = experiment_params
-        logger.debug('initializing experiment')
+        logger.info('initializing experiment')
 
         if os.path.exists(EXP_DIR):
             setup_logging(log_name, quiet, verbose)
@@ -552,6 +552,8 @@ class EvolverNamespace(BaseNamespace):
             custom_script.turbidostat(self, data, vials, elapsed_time)
         elif mode == 'chemostat':
             custom_script.chemostat(self, data, vials, elapsed_time)
+        elif mode == 'growthcurve':
+            custom_script.growth_curve(self, data, vials, elapsed_time)
         else:
             # try to load the user function
             # if failing report to user
@@ -646,6 +648,10 @@ if __name__ == '__main__':
 
             # check if a message has come in from the DPU
             message = nbsr.readline()
+            if 'stop-script' in message:
+                logger.info('Stop message received - halting all pumps');
+                EVOLVER_NS.stop_exp()
+                socketIO.disconnect()
             if 'pause-script' in message:
                 print('Pausing experiment', flush = True)
                 logger.info('Pausing experiment in dpu')

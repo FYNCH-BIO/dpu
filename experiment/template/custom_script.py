@@ -31,6 +31,9 @@ OPERATION_MODE = 'turbidostat' #use to choose between 'turbidostat' and 'chemost
 
 ##### END OF USER DEFINED GENERAL SETTINGS #####
 
+def growth_curve(eVOLVER, input_data, vials, elapsed_time):
+    return
+
 def turbidostat(eVOLVER, input_data, vials, elapsed_time):
     OD_data = input_data['transformed']['od']
 
@@ -158,14 +161,16 @@ def chemostat(eVOLVER, input_data, vials, elapsed_time):
     OD_data = input_data['transformed']['od']
 
     ##### USER DEFINED VARIABLES #####
-    start_OD = 0 # ~OD600, set to 0 to start chemostate dilutions at any positive OD
-    start_time = 0 #hours, set 0 to start immediately
+    start_OD = [0] * 16 # ~OD600, set to 0 to start chemostate dilutions at any positive OD
+    start_time = [0] * 16 #hours, set 0 to start immediately
     # Note that script uses AND logic, so both start time and start OD must be surpassed
 
     OD_values_to_average = 6  # Number of values to calculate the OD average
+
     chemostat_vials = vials #vials is all 16, can set to different range (ex. [0,1,2,3]) to only trigger tstat on those vials
 
     rate_config = [0.5] * 16 #to set all vials to the same value, creates 16-value list
+    stir = [8] * 16
     #UNITS of 1/hr, NOT mL/hr, rate = flowrate/volume, so dilution rate ~ growth rate, set to 0 for unused vials
 
     #Alternatively, use 16 value list to set different rates, use 0 for vials not being used
@@ -173,6 +178,11 @@ def chemostat(eVOLVER, input_data, vials, elapsed_time):
 
     ##### END OF USER DEFINED VARIABLES #####
 
+    if eVOLVER.experiment_params is not None:
+        rate_config = list(map(lambda x: x['rate'], eVOLVER.experiment_params['vial_configuration']))
+        stir = list(map(lambda x: x['stir'], eVOLVER.experiment_params['vial_configuration']))
+        start_time= list(map(lambda x: x['startTime'], eVOLVER.experiment_params['vial_configuration']))
+        start_OD= list(map(lambda x: x['startOD'], eVOLVER.experiment_params['vial_configuration']))
 
     ##### Chemostat Settings #####
 
@@ -216,7 +226,7 @@ def chemostat(eVOLVER, input_data, vials, elapsed_time):
             last_chemorate = chemo_config[len(chemo_config)-1][2] #should be 0 initially, then period in seconds after new commands are sent
 
             # once start time has passed and culture hits start OD, if no command has been written, write new chemostat command to file
-            if ((elapsed_time > start_time) & (average_OD > start_OD)):
+            if ((elapsed_time > start_time[x]) and (average_OD > start_OD[x])):
 
                 #calculate time needed to pump bolus for each pump
                 bolus_in_s[x] = bolus/flow_rate[x]
