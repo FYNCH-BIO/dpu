@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 
 #set new name for each experiment, otherwise files will be overwritten
 EXP_NAME = 'data'
-EVOLVER_IP = '192.168.1.2'
+
+# Port for the eVOLVER connection. You should not need to change this unless you have multiple applications on a single RPi.
 EVOLVER_PORT = 8081
 
 ##### Identify pump calibration files, define initial values for temperature, stirring, volume, power settings
