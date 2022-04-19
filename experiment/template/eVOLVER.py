@@ -16,7 +16,7 @@ from nbstreamreader import NonBlockingStreamReader as NBSR
 
 import custom_script
 from custom_script import EXP_NAME
-from custom_script import EVOLVER_IP, EVOLVER_PORT, OPERATION_MODE
+from custom_script import EVOLVER_PORT, OPERATION_MODE
 from custom_script import STIR_INITIAL, TEMP_INITIAL
 
 # Should not be changed
@@ -46,6 +46,7 @@ class EvolverNamespace(BaseNamespace):
     use_blank = False
     OD_initial = None
     experiment_params = None
+    ip_address = None
 
     def on_connect(self, *args):
         print("Connected to eVOLVER as client")
@@ -315,7 +316,8 @@ class EvolverNamespace(BaseNamespace):
             text_file.write(default + '\n')
         text_file.close()
 
-    def initialize_exp(self, vials, experiment_params, log_name, quiet, verbose, always_yes = False):
+    def initialize_exp(self, vials, experiment_params, log_name, quiet, verbose, ip_address, always_yes = False):
+        self.ip_address = ip_address
         self.experiment_params = experiment_params
         logger.info('initializing experiment')
 
@@ -589,28 +591,31 @@ def get_options():
     description = 'Run an eVOLVER experiment from the command line'
     parser = argparse.ArgumentParser(description=description)
 
-    parser.add_argument('--always-yes', action='store_true',
+    parser.add_argument('-y', '--always-yes', action='store_true',
                         default=False,
                         help='Answer yes to all questions '
                              '(i.e. continues from existing experiment, '
                              'overwrites existing data and blanks OD '
                              'measurements)')
-    parser.add_argument('--log-name',
+    parser.add_argument('-l', '--log-name',
                         default=os.path.join(EXP_DIR, 'evolver.log'),
                         help='Log file name directory (default: %(default)s)')
+    parser.add_argument('-i', '--ip-address', action='store', dest='ip_address',
+                        help='IP address of eVOLVER to run experiment on.')
 
     log_nolog = parser.add_mutually_exclusive_group()
-    log_nolog.add_argument('--verbose', action='count',
+    log_nolog.add_argument('-v', '--verbose', action='count',
                            default=0,
                            help='Increase logging verbosity level to DEBUG '
                                 '(default: INFO)')
-    log_nolog.add_argument('--quiet', action='store_true',
+    log_nolog.add_argument('-q', '--quiet', action='store_true',
                            default=False,
                            help='Disable logging to file entirely')
-    return parser.parse_args()
+    return parser.parse_args(), parser
 
 if __name__ == '__main__':
-    options = get_options()
+    options, parser = get_options()
+
 
     #changes terminal tab title in OSX
     print('\x1B]0;eVOLVER EXPERIMENT: PRESS Ctrl-C TO PAUSE\x07')
@@ -619,7 +624,12 @@ if __name__ == '__main__':
     if os.path.exists(JSON_PARAMS_FILE):
         with open(JSON_PARAMS_FILE) as f:
             experiment_params = json.load(f)
-    evolver_ip = experiment_params['ip'] if experiment_params is not None else EVOLVER_IP
+    evolver_ip = experiment_params['ip'] if experiment_params is not None else options.ip_address
+    if evolver_ip is None:
+        logger.error('No IP address found. Please provide on the command line or through the GUI.')
+        parser.print_help()
+        sys.exit(2)
+
     socketIO = SocketIO(evolver_ip, EVOLVER_PORT)
     EVOLVER_NS = socketIO.define(EvolverNamespace, '/dpu-evolver')
 
@@ -631,6 +641,7 @@ if __name__ == '__main__':
                                                       options.log_name,
                                                       options.quiet,
                                                       options.verbose,
+                                                      evolver_ip,
                                                       options.always_yes
                                                       )
 
