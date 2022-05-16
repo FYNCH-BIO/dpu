@@ -247,6 +247,8 @@ if __name__ == '__main__':
     parser.add_option('-t', '--fit-type', action = 'store', dest = 'fittype', help = "Valid options: sigmoid, linear, constant, 3d")
     parser.add_option('-f', '--fit-name', action = 'store', dest = 'fitname', help = "Desired name for the fit.")
     parser.add_option('-p', '--params', action = 'store', dest = 'params', help = "Desired parameter(s) to fit. Comma separated, no spaces")
+    parser.add_option('-y', '--always-yes', action = 'store_true', dest = 'alwaysyes', help = "Skips asking to save calibration to eVOLVER")
+    parser.add_option('-r', '--no-graph', action = 'store_true', dest = 'nograph', help = "Skips graphing if provided")
 
 
     (options, args) = parser.parse_args()
@@ -255,6 +257,8 @@ if __name__ == '__main__':
     fit_type = options.fittype
     fit_name = options.fitname
     params = options.params
+    always_yes = options.alwaysyes
+    no_graph = options.nograph
 
     if not options.ipaddress:
         print('Please specify ip address')
@@ -291,6 +295,8 @@ if __name__ == '__main__':
             print("Must provide at least 1 parameter!")
             parser.print_help()
             sys.exit(2)
+        if no_graph is None:
+            no_graph = False
         dpu_evolver_ns.emit('getcalibration', {'name':cal_name}, namespace='/dpu-evolver')
         params = params.strip().split(',')
 
@@ -299,14 +305,16 @@ if __name__ == '__main__':
 
     if cal_name is not None and not get_names:
         if fit_type == "sigmoid":
-            fit = sigmoid_fit(calibration, fit_name, params)
+            fit = sigmoid_fit(calibration, fit_name, params, graph = not no_graph)
         elif fit_type == "linear":
-            fit = linear_fit(calibration, fit_name, params)
+            fit = linear_fit(calibration, fit_name, params, graph = not no_graph)
         elif fit_type == "constant":
-            fit = constant_fit(calibration, fit_name, params)
+            fit = constant_fit(calibration, fit_name, params, graph = not no_graph)
         elif fit_type == "3d":
-            fit = three_dimension_fit(calibration, fit_name, params)
+            fit = three_dimension_fit(calibration, fit_name, params, graph = not no_graph)
 
-        update_cal = input('Update eVOLVER with calibration? (y/n): ')
+        update_cal = 'y'
+        if not always_yes:
+            update_cal = input('Update eVOLVER with calibration? (y/n): ')
         if update_cal == 'y':
             dpu_evolver_ns.emit('setfitcalibration', {'name': cal_name, 'fit': fit}, namespace = '/dpu-evolver')
