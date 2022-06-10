@@ -82,18 +82,16 @@ def linear_fit(calibration, fit_name, params, graph = True):
     coefficients = []
 
     # For single param calibrations, just take the first value from the returned dictionary
-    print(calibration)
     calibration_data = list(process_vial_data(calibration, param = params[0]).values())[0]
     medians = calibration_data["medians"]
     standard_deviations = calibration_data["standard_deviations"]
     measured_data = calibration_data["measured_data"]
 
     for i in range(16):
-        print(measured_data[i])
-        print(medians[i])
         paramlin, cov = curve_fit(linear, medians[i], measured_data[i])
         coefficients.append(paramlin.tolist())
 
+    print(coefficients)
     if graph:
         graph_2d_data(linear, medians, measured_data, standard_deviations, coefficients, fit_name, 'linear', 500, 3000, 50)
 
