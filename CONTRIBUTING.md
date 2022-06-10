@@ -44,6 +44,12 @@ When you are ready to submit your pull-request:
 * Open the pull request to the branch you've based your work on
 
 For more details on submitting a pull-request, please see:  [GitHub Guide to Collaborating with issues and pull requests](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests).
+## Branches within eVOLVER
+Each eVOLVER repository maintains three branches:
+
+* **master**: This reflects the current release of eVOLVER software. Typically you should not make PRs into this branch.
+* **rc**: Release candidate branch. This branch is for new feature development and testing before releasing into master. Once we are ready to release all the new features out we will merge this branch into master.
+* **hotfix**: This branch is used for bug fixes that need to immediately go into master and be released before other features in RC are ready. Once bugs are fixed in this branch, the changes are merged into master and rc.
 
 ### Getting your changes reviewed
 
