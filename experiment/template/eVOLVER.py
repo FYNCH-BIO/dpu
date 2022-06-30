@@ -108,6 +108,10 @@ class EvolverNamespace(BaseNamespace):
         self.custom_functions(data, VIALS, elapsed_time)
         # save variables
         self.save_variables(self.start_time, self.OD_initial)
+        
+        # Restart logging for db/gdrive syncing
+        logging.shutdown()
+        logging.getLogger('eVOLVER')
 
     def on_activecalibrations(self, data):
         print('Calibrations recieved')
