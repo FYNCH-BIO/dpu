@@ -17,7 +17,7 @@ py experiment/your_exptdir/eVOLVER.py
 
 ## Start graphing tool for eVOLVER. Start in new Terminal.
 
-NOTE: Experiment name must have 'expt' to get properly graphed.
+NOTE: Experiment name must have 'expt' to get properly graphed. We are also moving to the GUI for graphing experiment data in real-time.
 
 #### Mac
 ```sh
@@ -38,27 +38,16 @@ See plots locally on http://127.0.0.1:8000
 
 #### Mac
 
-#### Install Homebrew and Python 3.6
+#### Install Homebrew
 
 ```sh
 /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 ```
 
 ```sh
-brew install --ignore-dependencies https://raw.githubusercontent.com/Homebrew/homebrew-core/f2a764ef944b1080be64bd88dca9a1d80130c558/Formula/python.rb
-```
-
-```sh
 brew install openssl
 brew install sqlite
 ```
-
-#### Windows
-
-Install from https://www.python.org/downloads/release/python-368/
-
-
-
 
 ## Install Dependencies
 
@@ -72,9 +61,8 @@ python3.6 setup.py install
 py setup.py install
 ```
 
-
-
 ## Run calibration code (after the raw values have been logged on the eVOLVER)
+The GUI will run calibrations automatically upon completion of the calibration protocols. However, you can still manually run a calibration if you would like to change calibration settings.
 
 ### List raw calibration files on eVOLVER 
 
