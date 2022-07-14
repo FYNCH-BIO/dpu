@@ -47,6 +47,7 @@ class EvolverNamespace(BaseNamespace):
     OD_initial = None
     experiment_params = None
     ip_address = None
+    exp_dir = EXP_DIR
 
     def on_connect(self, *args):
         print("Connected to eVOLVER as client")
@@ -61,13 +62,13 @@ class EvolverNamespace(BaseNamespace):
         logger.info("reconnected to eVOLVER as client")
 
     def on_broadcast(self, data):
-        logger.info('broadcast received')
+        logger.info('Broadcast received')
         elapsed_time = round((time.time() - self.start_time) / 3600, 4)
-        logger.info('elapsed time: %.4f hours' % elapsed_time)
+        logger.info('Elapsed time: %.4f hours' % elapsed_time)
         print("{0}: {1} Hours".format(EXP_NAME, elapsed_time))
         # are the calibrations in yet?
         if not self.check_for_calibrations():
-            logger.warning('calibration files still missing, skipping custom '
+            logger.warning('Calibration files still missing, skipping custom '
                            'functions')
             return
 
@@ -93,22 +94,27 @@ class EvolverNamespace(BaseNamespace):
         data['transformed']['od'] = (data['transformed']['od'] -
                                         self.OD_initial)
         # save data
-        self.save_data(data['transformed']['od'], elapsed_time,
-                        VIALS, 'OD')
-        self.save_data(data['transformed']['temp'], elapsed_time,
-                        VIALS, 'temp')
+        try:
+            self.save_data(data['transformed']['od'], elapsed_time,
+                            VIALS, 'OD')
+            self.save_data(data['transformed']['temp'], elapsed_time,
+                            VIALS, 'temp')
 
-        for param in od_cal['params']:
-            self.save_data(data['data'].get(param, []), elapsed_time,
-                        VIALS, param + '_raw')
-        for param in temp_cal['params']:
-            self.save_data(data['data'].get(param, []), elapsed_time,
-                        VIALS, param + '_raw')
+            for param in od_cal['params']:
+                self.save_data(data['data'].get(param, []), elapsed_time,
+                            VIALS, param + '_raw')
+            for param in temp_cal['params']:
+                self.save_data(data['data'].get(param, []), elapsed_time,
+                            VIALS, param + '_raw')
+        except OSError:
+            logger.info("Broadcast received before experiment initialization - skipping custom function...")
+            return
+
         # run custom functions
         self.custom_functions(data, VIALS, elapsed_time)
         # save variables
         self.save_variables(self.start_time, self.OD_initial)
-        
+
         # Restart logging for db/gdrive syncing
         logging.shutdown()
         logging.getLogger('eVOLVER')
