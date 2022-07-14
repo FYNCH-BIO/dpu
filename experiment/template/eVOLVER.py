@@ -25,7 +25,7 @@ from custom_script import STIR_INITIAL, TEMP_INITIAL
 VIALS = [x for x in range(16)]
 
 SAVE_PATH = os.path.dirname(os.path.realpath(__file__))
-EXP_DIR = os.path.join(SAVE_PATH, 'data')
+EXP_DIR = os.path.join(SAVE_PATH, EXP_NAME)
 OD_CAL_PATH = os.path.join(SAVE_PATH, 'od_cal.json')
 TEMP_CAL_PATH = os.path.join(SAVE_PATH, 'temp_cal.json')
 PUMP_CAL_PATH = os.path.join(SAVE_PATH, 'pump_cal.json')
@@ -47,7 +47,7 @@ class EvolverNamespace(BaseNamespace):
     OD_initial = None
     experiment_params = None
     ip_address = None
-    exp_dir = EXP_DIR
+    exp_dir = SAVE_DIR
 
     def on_connect(self, *args):
         print("Connected to eVOLVER as client")
