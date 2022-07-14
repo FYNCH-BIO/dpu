@@ -47,7 +47,7 @@ class EvolverNamespace(BaseNamespace):
     OD_initial = None
     experiment_params = None
     ip_address = None
-    exp_dir = SAVE_DIR
+    exp_dir = SAVE_PATH
 
     def on_connect(self, *args):
         print("Connected to eVOLVER as client")
