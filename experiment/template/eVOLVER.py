@@ -12,10 +12,11 @@ import json
 import traceback
 from scipy import stats
 from socketIO_client import SocketIO, BaseNamespace
+from nbstreamreader import NonBlockingStreamReader as NBSR
 
 import custom_script
-from custom_script import EXP_NAME, PUMP_CAL_FILE
-from custom_script import EVOLVER_IP, EVOLVER_PORT, OPERATION_MODE
+from custom_script import EXP_NAME
+from custom_script import EVOLVER_PORT, OPERATION_MODE
 from custom_script import STIR_INITIAL, TEMP_INITIAL
 
 # Should not be changed
@@ -27,6 +28,8 @@ SAVE_PATH = os.path.dirname(os.path.realpath(__file__))
 EXP_DIR = os.path.join(SAVE_PATH, EXP_NAME)
 OD_CAL_PATH = os.path.join(SAVE_PATH, 'od_cal.json')
 TEMP_CAL_PATH = os.path.join(SAVE_PATH, 'temp_cal.json')
+PUMP_CAL_PATH = os.path.join(SAVE_PATH, 'pump_cal.json')
+JSON_PARAMS_FILE = os.path.join(SAVE_PATH, 'eVOLVER_parameters.json')
 
 SIGMOID = 'sigmoid'
 LINEAR = 'linear'
@@ -34,12 +37,17 @@ THREE_DIMENSION = '3d'
 
 logger = logging.getLogger('eVOLVER')
 
+paused = False
+
 EVOLVER_NS = None
 
 class EvolverNamespace(BaseNamespace):
     start_time = None
     use_blank = False
     OD_initial = None
+    experiment_params = None
+    ip_address = None
+    exp_dir = SAVE_PATH
 
     def on_connect(self, *args):
         print("Connected to eVOLVER as client")
@@ -54,13 +62,13 @@ class EvolverNamespace(BaseNamespace):
         logger.info("reconnected to eVOLVER as client")
 
     def on_broadcast(self, data):
-        logger.debug('broadcast received')
+        logger.info('Broadcast received')
         elapsed_time = round((time.time() - self.start_time) / 3600, 4)
-        logger.debug('elapsed time: %.4f hours' % elapsed_time)
+        logger.info('Elapsed time: %.4f hours' % elapsed_time)
         print("{0}: {1} Hours".format(EXP_NAME, elapsed_time))
         # are the calibrations in yet?
         if not self.check_for_calibrations():
-            logger.warning('calibration files still missing, skipping custom '
+            logger.warning('Calibration files still missing, skipping custom '
                            'functions')
             return
 
@@ -86,29 +94,41 @@ class EvolverNamespace(BaseNamespace):
         data['transformed']['od'] = (data['transformed']['od'] -
                                         self.OD_initial)
         # save data
-        self.save_data(data['transformed']['od'], elapsed_time,
-                        VIALS, 'OD')
-        self.save_data(data['transformed']['temp'], elapsed_time,
-                        VIALS, 'temp')
+        try:
+            self.save_data(data['transformed']['od'], elapsed_time,
+                            VIALS, 'OD')
+            self.save_data(data['transformed']['temp'], elapsed_time,
+                            VIALS, 'temp')
 
-        for param in od_cal['params']:
-            self.save_data(data['data'].get(param, []), elapsed_time,
-                        VIALS, param + '_raw')
-        for param in temp_cal['params']:
-            self.save_data(data['data'].get(param, []), elapsed_time,
-                        VIALS, param + '_raw')
+            for param in od_cal['params']:
+                self.save_data(data['data'].get(param, []), elapsed_time,
+                            VIALS, param + '_raw')
+            for param in temp_cal['params']:
+                self.save_data(data['data'].get(param, []), elapsed_time,
+                            VIALS, param + '_raw')
+        except OSError:
+            logger.info("Broadcast received before experiment initialization - skipping custom function...")
+            return
+
         # run custom functions
         self.custom_functions(data, VIALS, elapsed_time)
         # save variables
         self.save_variables(self.start_time, self.OD_initial)
 
+        # Restart logging for db/gdrive syncing
+        logging.shutdown()
+        logging.getLogger('eVOLVER')
+
     def on_activecalibrations(self, data):
         print('Calibrations recieved')
+        logger.info('Calibrations recieved')
         for calibration in data:
             if calibration['calibrationType'] == 'od':
                 file_path = OD_CAL_PATH
             elif calibration['calibrationType'] == 'temperature':
                 file_path = TEMP_CAL_PATH
+            elif calibration['calibrationType'] == 'pump':
+                file_path = PUMP_CAL_PATH
             else:
                 continue
             for fit in calibration['fits']:
@@ -117,7 +137,7 @@ class EvolverNamespace(BaseNamespace):
                         json.dump(fit, f)
                     # Create raw data directories and files for params needed
                     for param in fit['params']:
-                        if not os.path.isdir(os.path.join(EXP_DIR, param + '_raw')):
+                        if not os.path.isdir(os.path.join(EXP_DIR, param + '_raw')) and param != 'pump':
                             os.makedirs(os.path.join(EXP_DIR, param + '_raw'))
                             for x in range(len(fit['coefficients'])):
                                 exp_str = "Experiment: {0} vial {1}, {2}".format(EXP_NAME,
@@ -229,7 +249,7 @@ class EvolverNamespace(BaseNamespace):
             # report if actual temperature doesn't match
             delta_t = np.abs(temps - temp_data).max()
             if delta_t > 0.2:
-                logger.info('actual temperature doesn\'t match configuration '
+                logger.debug('actual temperature doesn\'t match configuration '
                             '(yet? max deltaT is %.2f)' % delta_t)
                 logger.debug('temperature config: %s' % temps)
                 logger.debug('actual temperatures: %s' % temp_data)
@@ -306,10 +326,13 @@ class EvolverNamespace(BaseNamespace):
             text_file.write(default + '\n')
         text_file.close()
 
-    def initialize_exp(self, vials, always_yes=False):
-        logger.debug('initializing experiment')
+    def initialize_exp(self, vials, experiment_params, log_name, quiet, verbose, ip_address, always_yes = False):
+        self.ip_address = ip_address
+        self.experiment_params = experiment_params
+        logger.info('initializing experiment')
 
         if os.path.exists(EXP_DIR):
+            setup_logging(log_name, quiet, verbose)
             logger.info('found an existing experiment')
             exp_continue = None
             if always_yes:
@@ -351,6 +374,7 @@ class EvolverNamespace(BaseNamespace):
             os.makedirs(os.path.join(EXP_DIR, 'ODset'))
             os.makedirs(os.path.join(EXP_DIR, 'growthrate'))
             os.makedirs(os.path.join(EXP_DIR, 'chemo_config'))
+            setup_logging(log_name, quiet, verbose)
             for x in vials:
                 exp_str = "Experiment: {0} vial {1}, {2}".format(EXP_NAME,
                                                                  x,
@@ -382,7 +406,13 @@ class EvolverNamespace(BaseNamespace):
                                             "0,0,0"],
                                   directory='chemo_config')
 
-            self.update_stir_rate(STIR_INITIAL)
+            stir_rate = STIR_INITIAL
+            temp_values = TEMP_INITIAL
+            if self.experiment_params:
+                stir_rate = list(map(lambda x: x['stir'], self.experiment_params['vial_configuration']))
+                temp_values = list(map(lambda x: x['temp'], self.experiment_params['vial_configuration']))
+            self.update_stir_rate(stir_rate)
+            self.update_temperature(temp_values)
 
             if always_yes:
                 exp_blank = 'y'
@@ -409,7 +439,7 @@ class EvolverNamespace(BaseNamespace):
         # copy current custom script to txt file
         backup_filename = '{0}_{1}.txt'.format(EXP_NAME,
                                             time.strftime('%y%m%d_%H%M'))
-        shutil.copy('custom_script.py', os.path.join(EXP_DIR,
+        shutil.copy(os.path.join(SAVE_PATH, 'custom_script.py'), os.path.join(EXP_DIR,
                                                     backup_filename))
         logger.info('saved a copy of current custom_script.py as %s' %
                     backup_filename)
@@ -418,7 +448,7 @@ class EvolverNamespace(BaseNamespace):
 
     def check_for_calibrations(self):
         result = True
-        if not os.path.exists(OD_CAL_PATH) or not os.path.exists(TEMP_CAL_PATH):
+        if not os.path.exists(OD_CAL_PATH) or not os.path.exists(TEMP_CAL_PATH) or not os.path.exists(PUMP_CAL_PATH):
             # log and request again
             logger.warning('Calibrations not received yet, requesting again')
             self.request_calibrations()
@@ -445,14 +475,10 @@ class EvolverNamespace(BaseNamespace):
             pickle.dump([start_time, OD_initial], f)
 
     def get_flow_rate(self):
-        file_path = os.path.join(SAVE_PATH, PUMP_CAL_FILE)
-        flow_calibration = np.loadtxt(file_path, delimiter="\t")
-        if len(flow_calibration) == 16:
-            flow_rate = flow_calibration
-        else:
-            # Currently just implementing influx flow rate
-            flow_rate = flow_calibration[0,:]
-        return flow_rate
+        pump_cal = None
+        with open(PUMP_CAL_PATH) as f:
+            pump_cal = json.load(f)
+        return pump_cal['coefficients']
 
     def calc_growth_rate(self, vial, gr_start, elapsed_time):
         ODfile_name =  "vial{0}_OD.txt".format(vial)
@@ -533,98 +559,144 @@ class EvolverNamespace(BaseNamespace):
 
     def custom_functions(self, data, vials, elapsed_time):
         # load user script from custom_script.py
-        if OPERATION_MODE == 'turbidostat':
+        mode = self.experiment_params['function'] if self.experiment_params else OPERATION_MODE
+        if mode == 'turbidostat':
             custom_script.turbidostat(self, data, vials, elapsed_time)
-        elif OPERATION_MODE == 'chemostat':
+        elif mode == 'chemostat':
             custom_script.chemostat(self, data, vials, elapsed_time)
+        elif mode == 'growthcurve':
+            custom_script.growth_curve(self, data, vials, elapsed_time)
         else:
             # try to load the user function
             # if failing report to user
-            logger.info('user-defined operation mode %s' % OPERATION_MODE)
+            logger.info('user-defined operation mode %s' % mode)
             try:
-                func = getattr(custom_script, OPERATION_MODE)
+                func = getattr(custom_script, mode)
                 func(self, data, vials, elapsed_time)
             except AttributeError:
                 logger.error('could not find function %s in custom_script.py' %
-                            OPERATION_MODE)
+                            mode)
                 print('Could not find function %s in custom_script.py '
                     '- Skipping user defined functions'%
-                    OPERATION_MODE)
+                    mode)
 
     def stop_exp(self):
         self.stop_all_pumps()
+
+def setup_logging(filename, quiet, verbose):
+    if quiet:
+        logging.basicConfig(level=logging.CRITICAL + 10)
+    else:
+        if verbose == 0:
+            level = logging.INFO
+        elif verbose >= 1:
+            level = logging.DEBUG
+        logging.basicConfig(format='%(asctime)s - %(name)s - [%(levelname)s] '
+                            '- %(message)s',
+                            datefmt='%Y-%m-%d %H:%M:%S',
+                            filename=filename,
+                            level=level)
 
 def get_options():
     description = 'Run an eVOLVER experiment from the command line'
     parser = argparse.ArgumentParser(description=description)
 
-    parser.add_argument('--always-yes', action='store_true',
+    parser.add_argument('-y', '--always-yes', action='store_true',
                         default=False,
                         help='Answer yes to all questions '
                              '(i.e. continues from existing experiment, '
                              'overwrites existing data and blanks OD '
                              'measurements)')
-    parser.add_argument('--log-name',
+    parser.add_argument('-l', '--log-name',
                         default=os.path.join(EXP_DIR, 'evolver.log'),
                         help='Log file name directory (default: %(default)s)')
+    parser.add_argument('-i', '--ip-address', action='store', dest='ip_address',
+                        help='IP address of eVOLVER to run experiment on.')
 
     log_nolog = parser.add_mutually_exclusive_group()
-    log_nolog.add_argument('--verbose', action='count',
+    log_nolog.add_argument('-v', '--verbose', action='count',
                            default=0,
                            help='Increase logging verbosity level to DEBUG '
                                 '(default: INFO)')
-    log_nolog.add_argument('--quiet', action='store_true',
+    log_nolog.add_argument('-q', '--quiet', action='store_true',
                            default=False,
                            help='Disable logging to file entirely')
-
-    return parser.parse_args()
+    return parser.parse_args(), parser
 
 if __name__ == '__main__':
-    options = get_options()
+    options, parser = get_options()
+
 
     #changes terminal tab title in OSX
     print('\x1B]0;eVOLVER EXPERIMENT: PRESS Ctrl-C TO PAUSE\x07')
 
-    # silence logging until experiment is initialized
-    logging.level = logging.CRITICAL + 10
+    experiment_params = None
+    if os.path.exists(JSON_PARAMS_FILE):
+        with open(JSON_PARAMS_FILE) as f:
+            experiment_params = json.load(f)
+    evolver_ip = experiment_params['ip'] if experiment_params is not None else options.ip_address
+    if evolver_ip is None:
+        logger.error('No IP address found. Please provide on the command line or through the GUI.')
+        parser.print_help()
+        sys.exit(2)
 
-    socketIO = SocketIO(EVOLVER_IP, EVOLVER_PORT)
+    socketIO = SocketIO(evolver_ip, EVOLVER_PORT)
     EVOLVER_NS = socketIO.define(EvolverNamespace, '/dpu-evolver')
 
     # start by stopping any existing chemostat
     EVOLVER_NS.stop_all_pumps()
     #
     EVOLVER_NS.start_time = EVOLVER_NS.initialize_exp(VIALS,
-                                                      options.always_yes)
+                                                      experiment_params,
+                                                      options.log_name,
+                                                      options.quiet,
+                                                      options.verbose,
+                                                      evolver_ip,
+                                                      options.always_yes
+                                                      )
+
+    # Using a non-blocking stream reader to be able to listen
+    # for commands from the electron app. 
+    nbsr = NBSR(sys.stdin)
+    paused = False
 
     # logging setup
-    if options.quiet:
-        logging.basicConfig(level=logging.CRITICAL + 10)
-    else:
-        if options.verbose == 0:
-            level = logging.INFO
-        elif options.verbose >= 1:
-            level = logging.DEBUG
-        logging.basicConfig(format='%(asctime)s - %(name)s - [%(levelname)s] '
-                            '- %(message)s',
-                            datefmt='%Y-%m-%d %H:%M:%S',
-                            filename=options.log_name,
-                            level=level)
 
     reset_connection_timer = time.time()
-    while True:
+    while True:        
         try:
             # infinite loop
-            socketIO.wait(seconds=0.1)
-            if time.time() - reset_connection_timer > 3600:
-                # reset connection to avoid buildup of broadcast
-                # messages (unlikely but could happen for very long
-                # experiments with slow dpu code/computer)
-                logger.info('resetting connection to eVOLVER to avoid '
-                            'potential buildup of broadcast messages')
+
+            # check if a message has come in from the DPU
+            message = nbsr.readline()
+            if 'stop-script' in message:
+                logger.info('Stop message received - halting all pumps');
+                EVOLVER_NS.stop_exp()
                 socketIO.disconnect()
+            if 'pause-script' in message:
+                print('Pausing experiment', flush = True)
+                logger.info('Pausing experiment in dpu')
+                paused = True
+                EVOLVER_NS.stop_exp()
+                socketIO.disconnect()
+                
+            if 'continue-script' in message:
+                print('Restarting experiment', flush = True)
+                logger.info('Restarting experiment')
+                paused = False
                 socketIO.connect()
-                reset_connection_timer = time.time()
+
+            if not paused:
+                    socketIO.wait(seconds=0.1)
+                    if time.time() - reset_connection_timer > 3600 and not paused:
+                        # reset connection to avoid buildup of broadcast
+                        # messages (unlikely but could happen for very long
+                        # experiments with slow dpu code/computer)
+                        logger.info('resetting connection to eVOLVER to avoid '
+                                    'potential buildup of broadcast messages')
+                        socketIO.disconnect()
+                        socketIO.connect()
+                        reset_connection_timer = time.time()
         except KeyboardInterrupt:
             try:
                 print('Ctrl-C detected, pausing experiment')
