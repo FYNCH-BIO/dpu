@@ -6,7 +6,7 @@ The Data Processing Module (DPU) portion of the eVOLVER code are Python scripts 
 
 #### Mac
 ```sh
-python3.6 experiment/your_exptdir/eVOLVER.py
+python experiment/your_exptdir/eVOLVER.py
 ```
 
 #### Windows
@@ -21,7 +21,7 @@ NOTE: Experiment name must have 'expt' to get properly graphed. We are also movi
 
 #### Mac
 ```sh
-python3.6 graphing/src/manage.py runserver
+python graphing/src/manage.py runserver
 ```
 #### Windows
 ```sh
@@ -53,7 +53,7 @@ brew install sqlite
 
 #### Mac
 ```sh
-python3.6 setup.py install
+python setup.py install
 ```
 
 #### Windows
@@ -68,32 +68,32 @@ The GUI will run calibrations automatically upon completion of the calibration p
 
 #### Mac
 ```sh
-python3.6 calibration/calibrate.py -a <ip_address> -g
+python calibration/calibrate.py -a <ip_address> -g
 ```
 
-For Windows, use py instead of python3.6 for all commands.
+For Windows, use py instead of python for all commands.
 
 ### Calibrate Temperature
 
 ```sh
-python3.6 calibration/calibrate.py -a <ip_address> -n <file_name> -t linear -f <name_after_fit> -p temp
+python calibration/calibrate.py -a <ip_address> -n <file_name> -t linear -f <name_after_fit> -p temp
 ```
 
 ### List raw OD JSON files logged on evolver 
 
 #### OD135
 ```sh
-python3.6 calibration/calibrate.py -a <ip_address> -n <file_name> -t sigmoid -f <name_after_fit> -p od_135
+python calibration/calibrate.py -a <ip_address> -n <file_name> -t sigmoid -f <name_after_fit> -p od_135
 ```
 
 #### OD90 (Check to ensure mode is configured properly)
 ```sh
-python3.6 calibration/calibrate.py -a <ip_address> -n <file_name> -t sigmoid -f <name_after_fit> -p od_90
+python calibration/calibrate.py -a <ip_address> -n <file_name> -t sigmoid -f <name_after_fit> -p od_90
 ```
 
 #### 3D FIT (Check to ensure mode is configured properly)
 ```sh
-python3.6 calibration/calibrate.py -a <ip_address> -n <file_name> -t 3d -f <name_after_fit> -p od_90,od_135
+python calibration/calibrate.py -a <ip_address> -n <file_name> -t 3d -f <name_after_fit> -p od_90,od_135
 ```
 
 
