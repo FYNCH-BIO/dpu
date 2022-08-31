@@ -2,6 +2,8 @@ dpu
 ===
 The Data Processing Module (DPU) portion of the eVOLVER code are Python scripts used to interface with the machine. This is where experimental scripts can be written, feedback loops between parameters can be programmed, or calibration files can be updated on eVOLVER.
 
+For more information about the DPU and installation, see the [wiki](https://khalil-lab.gitbook.io/evolver/getting-started/software-installation/dpu-installation).
+
 ## Run experimental scripts code for eVOLVER
 
 #### Mac
