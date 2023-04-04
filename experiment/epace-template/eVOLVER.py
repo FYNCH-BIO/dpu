@@ -80,6 +80,7 @@ class EvolverNamespace(BaseNamespace):
         # apply calibrations
         # update temperatures if needed
         data = self.transform_data(data, VIALS, od_cal, temp_cal)
+        
         if data is None:
             logger.error('could not tranform raw data, skipping user-'
                          'defined functions')
@@ -92,7 +93,7 @@ class EvolverNamespace(BaseNamespace):
         elif self.OD_initial is None:
             self.OD_initial = np.zeros(len(VIALS))
         data['transformed']['od'] = (data['transformed']['od'] -
-                                        self.OD_initial)
+                                       self.OD_initial)
         # save data
         try:
             self.save_data(data['transformed']['od'], elapsed_time,
@@ -243,7 +244,7 @@ class EvolverNamespace(BaseNamespace):
             raw_temperatures = [str(int((temps[x] - temp_cal['coefficients'][x][1]) /
                                         temp_cal['coefficients'][x][0]))
                                 for x in vials]
-            self.update_temperature(raw_temperatures)
+            # self.update_temperature(raw_temperatures)
         else:
             # config from server agrees with local config
             # report if actual temperature doesn't match
@@ -278,14 +279,14 @@ class EvolverNamespace(BaseNamespace):
                    'recurring': False ,'immediate': True}
         self.emit('command', command, namespace='/dpu-evolver')
 
-    def update_chemo(self, data, vials, bolus_in_s, period_config, immediate = False):
+    def update_chemo(self, data, vials, bolus_in_s, period_config, inducer_bolus, inducer_rate, immediate = False):
         current_pump = data['config']['pump']['value']
 
-        MESSAGE = {'fields_expected_incoming': 3,
-                   'fields_expected_outgoing': 3,
+        MESSAGE = {'fields_expected_incoming': 7,
+                   'fields_expected_outgoing': 7,
                    'recurring': True,
                    'immediate': immediate,
-                   'value': ['--'] * 2,
+                   'value': ['--'] * 6,
                    'param': 'pump'}
 
         for x in vials:
@@ -302,8 +303,11 @@ class EvolverNamespace(BaseNamespace):
                 MESSAGE['value'][x + 2] = '%.2f|%d' % (bolus_in_s[x] * 2,
                                                         period_config[x])
 
+        MESSAGE['value'][4] = '%.2f|%d' % (inducer_bolus, inducer_rate)
+
         if MESSAGE['value'] != current_pump:
             logger.info('updating chemostat: %s' % MESSAGE)
+            print(MESSAGE)
             self.emit('command', MESSAGE, namespace = '/dpu-evolver')
 
     def stop_all_pumps(self, ):
@@ -412,7 +416,7 @@ class EvolverNamespace(BaseNamespace):
                 stir_rate = list(map(lambda x: x['stir'], self.experiment_params['vial_configuration']))
                 temp_values = list(map(lambda x: x['temp'], self.experiment_params['vial_configuration']))
             self.update_stir_rate(stir_rate)
-            self.update_temperature(temp_values)
+            # self.update_temperature(temp_values)
 
             if always_yes:
                 exp_blank = 'y'

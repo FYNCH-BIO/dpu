@@ -16,19 +16,19 @@ logger = logging.getLogger(__name__)
 EXP_NAME = 'data'
 
 # Port for the eVOLVER connection. You should not need to change this unless you have multiple applications on a single RPi.
-EVOLVER_PORT = 8081
+EVOLVER_PORT = 5555
 
 ##### Identify pump calibration files, define initial values for temperature, stirring, volume, power settings
 
-TEMP_INITIAL = [30] * 16 #degrees C, makes 16-value list
-#Alternatively enter 16-value list to set different values
-#TEMP_INITIAL = [30,30,30,30,32,32,32,32,34,34,34,34,36,36,36,36]
+TEMP_INITIAL = [37] * 2 #degrees C, makes 2-value list
+#Alternatively enter 2-value list to set different values
+#TEMP_INITIAL = [30,37]
 
-STIR_INITIAL = [8] * 16 #try 8,10,12 etc; makes 16-value list
-#Alternatively enter 16-value list to set different values
-#STIR_INITIAL = [7,7,7,7,8,8,8,8,9,9,9,9,10,10,10,10]
+STIR_INITIAL = [11] * 2 #try 8,10,12 etc; makes 2-value list
+#Alternatively enter 2-value list to set different values
+#STIR_INITIAL = [7,8]
 
-VOLUME =  25 #mL, determined by vial cap straw length
+VOLUME = 30 #mL, determined by vial cap straw length
 OPERATION_MODE = 'turbidostat' #use to choose between 'turbidostat' and 'chemostat' functions
 # if using a different mode, name your function as the OPERATION_MODE variable
 
@@ -42,20 +42,20 @@ def turbidostat(eVOLVER, input_data, vials, elapsed_time):
 
     ##### USER DEFINED VARIABLES #####
 
-    turbidostat_vials = vials #vials is all 16, can set to different range (ex. [0,1,2,3]) to only trigger tstat on those vials
+    turbidostat_vials = vials #vials is all 2, can set to different range (ex. [0,1,2,3]) to only trigger tstat on those vials
     stop_after_n_curves = np.inf #set to np.inf to never stop, or integer value to stop diluting after certain number of growth curves
     OD_values_to_average = 6  # Number of values to calculate the OD average
 
-    lower_thresh = [0.2] * len(vials) #to set all vials to the same value, creates 16-value list
-    upper_thresh = [0.4] * len(vials) #to set all vials to the same value, creates 16-value list
+    lower_thresh = [0.25] * len(vials) #to set all vials to the same value, creates 2-value list
+    upper_thresh = [0.35] * len(vials) #to set all vials to the same value, creates 2-value list
 
     if eVOLVER.experiment_params is not None:
         lower_thresh = list(map(lambda x: x['lower'], eVOLVER.experiment_params['vial_configuration']))
         upper_thresh = list(map(lambda x: x['upper'], eVOLVER.experiment_params['vial_configuration']))
 
-    #Alternatively, use 16 value list to set different thresholds, use 9999 for vials not being used
-    #lower_thresh = [0.2, 0.2, 0.3, 0.3, 9999, 9999, 9999, 9999, 9999, 9999, 9999, 9999, 9999, 9999, 9999, 9999]
-    #upper_thresh = [0.4, 0.4, 0.4, 0.4, 9999, 9999, 9999, 9999, 9999, 9999, 9999, 9999, 9999, 9999, 9999, 9999]
+    #Alternatively, use 2 value list to set different thresholds, use 9999 for vials not being used
+    #lower_thresh = [0.2, 9999]
+    #upper_thresh = [0.4, 9999]
 
 
     ##### END OF USER DEFINED VARIABLES #####
@@ -64,7 +64,7 @@ def turbidostat(eVOLVER, input_data, vials, elapsed_time):
     ##### Turbidostat Settings #####
     #Tunable settings for overflow protection, pump scheduling etc. Unlikely to change between expts
 
-    time_out = 5 #(sec) additional amount of time to run efflux pump
+    time_out = 8 #(sec) additional amount of time to run efflux pump
     pump_wait = 3 # (min) minimum amount of time to wait between pump events
 
     ##### End of Turbidostat Settings #####
@@ -74,7 +74,7 @@ def turbidostat(eVOLVER, input_data, vials, elapsed_time):
     ##### Turbidostat Control Code Below #####
 
     # fluidic message: initialized so that no change is sent
-    MESSAGE = ['--'] * 48
+    MESSAGE = ['--'] * 6
     for x in turbidostat_vials: #main loop through each vial
 
         # Update turbidostat configuration files for each vial
@@ -138,7 +138,7 @@ def turbidostat(eVOLVER, input_data, vials, elapsed_time):
                     # influx pump
                     MESSAGE[x] = str(time_in)
                     # efflux pump
-                    MESSAGE[x + 16] = str(time_in + time_out)
+                    MESSAGE[x + 2] = str(time_in + time_out)
 
                     file_name =  "vial{0}_pump_log.txt".format(x)
                     file_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, 'pump_log', file_name)
@@ -150,7 +150,7 @@ def turbidostat(eVOLVER, input_data, vials, elapsed_time):
             logger.debug('not enough OD measurements for vial %d' % x)
 
     # send fluidic command only if we are actually turning on any of the pumps
-    if MESSAGE != ['--'] * 48:
+    if MESSAGE != ['--'] * 6:
         eVOLVER.fluid_command(MESSAGE)
 
         # your_FB_function_here() #good spot to call feedback functions for dynamic temperature, stirring, etc for ind. vials
@@ -162,20 +162,20 @@ def chemostat(eVOLVER, input_data, vials, elapsed_time):
     OD_data = input_data['transformed']['od']
 
     ##### USER DEFINED VARIABLES #####
-    start_OD = [0] * 16 # ~OD600, set to 0 to start chemostate dilutions at any positive OD
-    start_time = [0] * 16 #hours, set 0 to start immediately
+    start_OD = [0] * 2 # ~OD600, set to 0 to start chemostate dilutions at any positive OD
+    start_time = [0] * 2 #hours, set 0 to start immediately
     # Note that script uses AND logic, so both start time and start OD must be surpassed
 
     OD_values_to_average = 6  # Number of values to calculate the OD average
 
-    chemostat_vials = vials #vials is all 16, can set to different range (ex. [0,1,2,3]) to only trigger tstat on those vials
+    chemostat_vials = vials #vials is 2, can set to different range (ex. [1] or [0]) to only trigger tstat on those vials
 
-    rate_config = [0.5] * 16 #to set all vials to the same value, creates 16-value list
-    stir = [8] * 16
+    rate_config = [0.5] * 2 #to set all vials to the same value, creates 2-value list
+    stir = [8] * 2
     #UNITS of 1/hr, NOT mL/hr, rate = flowrate/volume, so dilution rate ~ growth rate, set to 0 for unused vials
 
-    #Alternatively, use 16 value list to set different rates, use 0 for vials not being used
-    #rate_config = [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5,1.6]
+    #Alternatively, use 2 value list to set different rates, use 0 for vials not being used
+    #rate_config = [0.1, 0.2]
 
     ##### END OF USER DEFINED VARIABLES #####
 
@@ -193,8 +193,8 @@ def chemostat(eVOLVER, input_data, vials, elapsed_time):
     ##### End of Chemostat Settings #####
 
     flow_rate = eVOLVER.get_flow_rate() #read from calibration file
-    period_config = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] #initialize array
-    bolus_in_s = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] #initialize array
+    period_config = [0,0] #initialize array
+    bolus_in_s = [0,0] #initialize array
 
 
     ##### Chemostat Control Code Below #####
