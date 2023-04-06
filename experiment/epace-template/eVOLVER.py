@@ -80,6 +80,7 @@ class EvolverNamespace(BaseNamespace):
         # apply calibrations
         # update temperatures if needed
         data = self.transform_data(data, VIALS, od_cal, temp_cal)
+        
         if data is None:
             logger.error('could not tranform raw data, skipping user-'
                          'defined functions')
@@ -278,7 +279,7 @@ class EvolverNamespace(BaseNamespace):
                    'recurring': False ,'immediate': True}
         self.emit('command', command, namespace='/dpu-evolver')
 
-    def update_chemo(self, data, vials, bolus_in_s, period_config, immediate = False):
+    def update_chemo(self, data, vials, bolus_in_s, period_config, inducer_bolus = 0, inducer_rate = 0, immediate = False):
         current_pump = data['config']['pump']['value']
 
         MESSAGE = {'fields_expected_incoming': 7,
@@ -302,8 +303,11 @@ class EvolverNamespace(BaseNamespace):
                 MESSAGE['value'][x + 2] = '%.2f|%d' % (bolus_in_s[x] * 2,
                                                         period_config[x])
 
+        MESSAGE['value'][4] = '%.2f|%d' % (inducer_bolus, inducer_rate)
+
         if MESSAGE['value'] != current_pump:
             logger.info('updating chemostat: %s' % MESSAGE)
+            print(MESSAGE)
             self.emit('command', MESSAGE, namespace = '/dpu-evolver')
 
     def stop_all_pumps(self, ):
