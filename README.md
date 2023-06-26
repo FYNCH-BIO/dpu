@@ -51,17 +51,37 @@ brew install openssl
 brew install sqlite
 ```
 
+The DPU requires python 3.9.
+
+#### Mac
+
+```sh
+brew install python@3.9
+```
+
+We use [poetry](https://python-poetry.org/) to manage our python dependencies. Use the following command to install it:
+
+```sh
+curl -sSL https://install.python-poetry.org | python3 -
+```
+
 ## Install Dependencies
 
 #### Mac
 ```sh
-python setup.py install
+python3.9 -m venv venv
+. venv/bin/activate
+poetry install
 ```
 
 #### Windows
 ```sh
-py setup.py install
+python3.9 -m venv venv
+. venv/bin/activate
+poetry install
 ```
+
+You must activate the virtual environment when running DPU scripts. If you close a terminal or re-open it, you'll need to run `. venv/bin/activate` again while in the dpu directory.
 
 ## Run calibration code (after the raw values have been logged on the eVOLVER)
 The GUI will run calibrations automatically upon completion of the calibration protocols. However, you can still manually run a calibration if you would like to change calibration settings.
