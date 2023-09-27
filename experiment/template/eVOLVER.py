@@ -412,11 +412,6 @@ class EvolverNamespace(BaseNamespace):
                 stir_rate = list(map(lambda x: x['stir'], self.experiment_params['vial_configuration']))
                 temp_values = list(map(lambda x: x['temp'], self.experiment_params['vial_configuration']))
             self.update_stir_rate(stir_rate)
-            with open(TEMP_CAL_PATH) as f:
-                temp_cal = json.load(f)
-                temp_coefficients = temp_cal['coefficients']
-                raw_temperatures = [str(int((temp_values[x] - temp_coefficients[x][1]) / temp_coefficients[x][0])) for x in vials]
-                self.update_temperature(raw_temperatures)
 
             if always_yes:
                 exp_blank = 'y'
