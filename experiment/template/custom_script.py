@@ -121,7 +121,7 @@ def turbidostat(eVOLVER, input_data, vials, elapsed_time):
             #if need to dilute to lower threshold, then calculate amount of time to pump
             if average_OD > ODset and collecting_more_curves:
 
-                time_in = - (np.log(lower_thresh[x]/average_OD)*VOLUME)/flow_rate[x]
+                time_in = - (np.log(lower_thresh[x]/average_OD)*VOLUME)/flow_rate[x + 2]
 
                 if time_in > 20:
                     time_in = 20
@@ -136,9 +136,9 @@ def turbidostat(eVOLVER, input_data, vials, elapsed_time):
                 if ((elapsed_time - last_pump)*60) >= pump_wait: # if sufficient time since last pump, send command to Arduino
                     logger.info('turbidostat dilution for vial %d' % x)
                     # influx pump
-                    MESSAGE[x] = str(time_in)
+                    MESSAGE[x + 2] = str(time_in)
                     # efflux pump
-                    MESSAGE[x + 2] = str(time_in + time_out)
+                    MESSAGE[x] = str(time_in + time_out)
 
                     file_name =  "vial{0}_pump_log.txt".format(x)
                     file_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, 'pump_log', file_name)
@@ -230,7 +230,7 @@ def chemostat(eVOLVER, input_data, vials, elapsed_time):
             if ((elapsed_time > start_time[x]) and (average_OD > start_OD[x])):
 
                 #calculate time needed to pump bolus for each pump
-                bolus_in_s[x] = bolus/flow_rate[x]
+                bolus_in_s[x] = bolus/flow_rate[x + 2]
 
                 # calculate the period (i.e. frequency of dilution events) based on user specified growth rate and bolus size
                 if rate_config[x] > 0:
