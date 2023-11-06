@@ -279,7 +279,7 @@ class EvolverNamespace(BaseNamespace):
                    'recurring': False ,'immediate': True}
         self.emit('command', command, namespace='/dpu-evolver')
 
-    def update_chemo(self, data, vials, bolus_in_s, period_config, inducer_bolus = 0, inducer_rate = 0, immediate = False):
+    def update_chemo(self, data, vials, bolus_in_s, period_config, inducer_bolus = [0,0], inducer_rate = [0,0], immediate = False):
         current_pump = data['config']['pump']['value']
 
         MESSAGE = {'fields_expected_incoming': 7,
@@ -302,7 +302,9 @@ class EvolverNamespace(BaseNamespace):
                 # efflux
                 MESSAGE['value'][x] = '%.2f|%d' % (bolus_in_s[x] * 2, period_config[x])
 
-        MESSAGE['value'][4] = '%.2f|%d' % (inducer_bolus, inducer_rate)
+        MESSAGE['value'][4] = '%.2f|%d' % (inducer_bolus[0], inducer_rate[0]) #inducer 1 - pump 5
+        MESSAGE['value'][5] = '%.2f|%d' % (inducer_bolus[1], inducer_rate[1]) #inducer 2 - pump 6
+
 
         if MESSAGE['value'] != current_pump:
             logger.info('updating chemostat: %s' % MESSAGE)

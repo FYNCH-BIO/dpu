@@ -57,7 +57,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     start_time = [0, 0] #hours, set 0 to start immediately
     rate_config = [0.4, 0.5]  #Volumes/hr
 
-    inducer_rate = 0.025 # Volumes/hr
+    inducer_rate = [0.025, 0] #Volumes/hr - [pump 5, pump 6] - setting to 0 stops
 
     inducer_on = True # whether inducer is flowing or not
 
@@ -82,9 +82,9 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
     flow_rate = eVOLVER.get_flow_rate() #read from calibration file
     period_config = [0,0] #initialize array
-    bolus_in_s = [0,0] #initialize array
-    bolus_slow_in_s = 0
-
+    bolus_in_s = [0,0] #initialize array - calculated bolus for fast input pumps
+    inducer_period = [0,0] #initialize array - calculated period for slow pumps
+    bolus_slow_in_s = [0,0] #initialize array - calculated bolus for slow pumps
 
     ##### TURBIDOSTAT CODE BELOW #####
 
@@ -233,11 +233,18 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
     # your_function_here() #good spot to call non-feedback functions for dynamic temperature, stirring, etc.
     if inducer_on:
-        bolus_slow_in_s = bolus_slow / float(flow_rate[5])
-        inducer_period = (3600 * bolus_slow)/(inducer_rate * LAGOON_VOLUME)
+        # calculate for inducer 1 - pump 5
+        if inducer_rate[0] != 0:
+            bolus_slow_in_s[0] = bolus_slow / float(flow_rate[4]) #calculate bolus
+            inducer_period[0] = (3600 * bolus_slow)/(inducer_rate[0] * LAGOON_VOLUME) #calculate period
+        
+        # calculate for inducer 2 - pump 6
+        if inducer_rate[1] != 0:
+            bolus_slow_in_s[1] = bolus_slow / float(flow_rate[5]) #calculate bolus
+            inducer_period[1] = (3600 * bolus_slow)/(inducer_rate[1] * LAGOON_VOLUME) #calculate period
     else:
-        inducer_period = 0
-        bolus_slow_in_s = 0
+        inducer_period = [0,0]
+        bolus_slow_in_s = [0,0]
     eVOLVER.update_chemo(input_data, chemostat_vials, bolus_in_s, period_config, bolus_slow_in_s, inducer_period) #compares computed chemostat config to the remote one
     # end of chemostat() fxn
 
