@@ -43,23 +43,22 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
     ##### USER DEFINED VARIABLES #####
 
-    reservoir_vial = 0
-    lagoon_vial = 1
+    reservoir_vial = 0 # Number of the reservoir vial
+    lagoon_vial = 1 # Number of the lagoon vial
 
     # Turbidostat Variables
-    stop_after_n_curves = np.inf #set to np.inf to never stop, or integer value to stop diluting after certain number of growth curves
-    OD_values_to_average = 6  # Number of values to calculate the OD average
-
-    lower_thresh = [0.9, 0] # set the lower OD threshold (0s for chemostats)
-    upper_thresh = [0.95, 0] # set the upper OD threshold (0s for chemostats)
+    lower_thresh = [0.9, 0] # set the lower OD threshold of the reservoir (0 for chemostat)
+    upper_thresh = [0.95, 0] # set the upper OD threshold of the reservoir (0 for chemostat)
     
     # Chemostat Variables
     start_time = [0, 0] #hours, set 0 to start immediately
-    rate_config = [0.4, 0.5]  #Volumes/hr
+    rate_config = [0.8, 0.5]  #Volumes/hr
 
-    inducer_rate = [0.025, 0] #Volumes/hr - [pump 5, pump 6] - setting to 0 stops
-
-    inducer_on = True # whether inducer is flowing or not
+    # Inducer Variables
+    inducer_on = False # whether inducer is flowing or not
+    inducer_concentration = [40, 100] # X times final concentration - [pump 5, pump 6] - setting to 0 stops
+    # For example: a lagoon with chemostat running at 1 Volumes/hr / 40X inducer stock concentration = 0.025 Volumes/hr of inducer added
+    # 0.025 Volumes/hr * 10mL LAGOON_VOLUME = 0.25mL of inducer stock added per hour (however the eVOLVER needs Volumes/hr)
 
     ##### END OF USER DEFINED VARIABLES #####
 
@@ -71,6 +70,9 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     pump_wait = 3 # (min) minimum amount of time to wait between pump events
     turbidostat_vials = [reservoir_vial] # zero indexed list of vials to trigger turbidostat on
 
+    stop_after_n_curves = np.inf #set to np.inf to never stop, or integer value to stop diluting after certain number of growth curves
+    OD_values_to_average = 6  # Number of values to take in to calculate the OD average
+
     ##### End of Turbidostat Settings #####
 
     ##### Chemostat Settings #####
@@ -81,6 +83,16 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
     chemostat_vials = [0, 1] # zero indexed list of vials to trigger chemostat on
     ##### End of Chemostat Settings #####
+
+    ##### Inducer Settings #####
+    lagoon_V_h = rate_config[lagoon_vial] # lagoon Volumes/hr
+
+    inducer_rate = [0,0] # Volumes/hr of inducer - initializing the array - [pump 5, pump 6] 
+    if inducer_concentration[0] != 0:
+        inducer_rate[0] = lagoon_V_h / inducer_concentration[0] #Volumes/hr  
+    if inducer_concentration[1] != 0:
+        inducer_rate[1] = lagoon_V_h / inducer_concentration[1] #Volumes/hr  
+    ##### End of Inducer Settings #####
 
     flow_rate = eVOLVER.get_flow_rate() #read from calibration file
     period_config = [0,0] #initialize array
