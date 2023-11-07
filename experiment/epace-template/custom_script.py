@@ -43,8 +43,8 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
     ##### USER DEFINED VARIABLES #####
 
-    turbidostat_vials = [0] # zero indexed list of vials to trigger turbidostat on
-    chemostat_vials = [0, 1] # zero indexed list of vials to trigger chemostat on
+    reservoir_vial = 0
+    lagoon_vial = 1
 
     # Turbidostat Variables
     stop_after_n_curves = np.inf #set to np.inf to never stop, or integer value to stop diluting after certain number of growth curves
@@ -69,6 +69,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
     time_out = 8 #(sec) additional amount of time to run efflux pump
     pump_wait = 3 # (min) minimum amount of time to wait between pump events
+    turbidostat_vials = [reservoir_vial] # zero indexed list of vials to trigger turbidostat on
 
     ##### End of Turbidostat Settings #####
 
@@ -78,6 +79,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     bolus = 0.5 #mL, can be changed with great caution, 0.2 is absolute minimum
     bolus_slow = 0.1 #mL, can be changed with great caution, 0.2 is absolute minimum
 
+    chemostat_vials = [0, 1] # zero indexed list of vials to trigger chemostat on
     ##### End of Chemostat Settings #####
 
     flow_rate = eVOLVER.get_flow_rate() #read from calibration file
@@ -210,10 +212,10 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
                 # calculate the period (i.e. frequency of dilution events) based on user specified growth rate and bolus size
                 if rate_config[x] > 0:
-                    if x == 0:
-                        volume = 30
+                    if x == reservoir_vial: # volume is set depending on the vial type
+                        volume = VOLUME
                     else:
-                        volume = 10
+                        volume = LAGOON_VOLUME
                     period_config[x] = (3600*bolus)/((rate_config[x])*volume) #scale dilution rate by bolus size and volume
                 else: # if no dilutions needed, then just loops with no dilutions
                     period_config[x] = 0
