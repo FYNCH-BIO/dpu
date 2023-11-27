@@ -43,16 +43,13 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
     ##### USER DEFINED VARIABLES #####
 
-    reservoir_vial = 0 # Number of the reservoir vial
-    lagoon_vial = 1 # Number of the lagoon vial
-
     # Turbidostat Variables
     lower_thresh = [0.9, 0] # set the lower OD threshold of the reservoir (0 for chemostat)
     upper_thresh = [0.95, 0] # set the upper OD threshold of the reservoir (0 for chemostat)
     
     # Chemostat Variables
     start_time = [0, 0] #hours, set 0 to start immediately
-    rate_config = [0.8, 0.5]  #Volumes/hr
+    rate_config = [0.5, 0.5]  #Volumes/hr
 
     # Inducer Variables
     inducer_on = False # whether inducer is flowing or not
@@ -62,6 +59,8 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
     ##### END OF USER DEFINED VARIABLES #####
 
+    reservoir_vial = 0 # Number of the reservoir vial
+    lagoon_vial = 1 # Number of the lagoon vial
 
     ##### Turbidostat Settings #####
     #Tunable settings for overflow protection, pump scheduling etc. Unlikely to change between expts
