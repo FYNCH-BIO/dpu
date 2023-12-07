@@ -16,6 +16,7 @@ matplotlib = "^3.0.2"
 socketIO-client = "^0.7.2"
 bokeh = "^0.10.0"
 Jinja2 = "^3.0.2"
+dash = "^2.14.1"
 
 [build-system]
 requires = ["poetry-core>=1.5.1"]
