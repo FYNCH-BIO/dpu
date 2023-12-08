@@ -379,6 +379,10 @@ class EvolverNamespace(BaseNamespace):
             os.makedirs(os.path.join(EXP_DIR, 'ODset'))
             os.makedirs(os.path.join(EXP_DIR, 'growthrate'))
             os.makedirs(os.path.join(EXP_DIR, 'chemo_config'))
+            os.makedirs(os.path.join(EXP_DIR, 'drift_config'))
+            os.makedirs(os.path.join(EXP_DIR, 'drift_log'))
+            os.makedirs(os.path.join(EXP_DIR, 'selection_log'))
+
             setup_logging(log_name, quiet, verbose)
             for x in vials:
                 exp_str = "Experiment: {0} vial {1}, {2}".format(EXP_NAME,
@@ -410,6 +414,16 @@ class EvolverNamespace(BaseNamespace):
                                   defaults=["0,0,0",
                                             "0,0,0"],
                                   directory='chemo_config')
+                self._create_file(x, 'drift_config',
+                                  defaults=["0,0,0,0,0,0"], # format is [elapsed_time, drift_stock_conc, drift_interval, drift_length, interval_modifier, alternate_selection]
+                                  directory='drift_config')
+                self._create_file(x, 'drift_log',
+                                  defaults=["0,0,0,0,0"], # format is [elapsed_time, current_drift_conc, drift_start, drift_end, interval_count]
+                                  directory='drift_log')   
+                self._create_file(x, 'selection_log',
+                                  defaults=["0,0,0,0"], # format is [elapsed_time, current_concentration, target_concentration, change_start]
+                                  directory='selection_log')
+
 
             stir_rate = STIR_INITIAL
             temp_values = TEMP_INITIAL
@@ -575,6 +589,8 @@ class EvolverNamespace(BaseNamespace):
             custom_script.chemostat(self, data, vials, elapsed_time)
         elif mode == 'growthcurve':
             custom_script.growth_curve(self, data, vials, elapsed_time)
+        elif mode == 'hybrid':
+            custom_script.hybrid(self, data, vials, elapsed_time)
         else:
             # try to load the user function
             # if failing report to user

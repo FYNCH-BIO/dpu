@@ -4,6 +4,7 @@ import numpy as np
 import logging
 import os.path
 import time
+import math
 
 # logger setup
 logger = logging.getLogger(__name__)
@@ -51,16 +52,27 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     start_time = [0, 0] #hours, set 0 to start immediately
     rate_config = [0.5, 0.5]  #Volumes/hr
 
-    # Inducer Variables
-    inducer_on = False # whether inducer is flowing or not
-    inducer_concentration = [40, 100] # X times final concentration - [pump 5, pump 6] - setting to 0 stops
+    #### Selection Variables ####
+    selection_start = 0 # hours, set 0 to start selection immediately
+    selection_stock_conc = 40 # X times final concentration - setting to 0 stops - pump 5
     # For example: a lagoon with chemostat running at 1 Volumes/hr / 40X inducer stock concentration = 0.025 Volumes/hr of inducer added
     # 0.025 Volumes/hr * 10mL LAGOON_VOLUME = 0.25mL of inducer stock added per hour (however the eVOLVER needs Volumes/hr)
 
+    #### Drift Variables ####
+    drift_expt_start = 0 # hours, set 0 to start drift immediately
+    drift_stock_conc = 25 # X times final concentration - setting to 0 stops - pump 6
+    drift_interval = .15 # hours; time between periods of drift
+    drift_length = .1 # hours; time that drift is fully on
+    interval_modifier = .05 # hours; additional time added to drift_interval after each drift
+    
+    alternate_selection = True # whether to alternate between selection and drift; selectiion inducer will wash out during drift
+    print_drift = True # whether to print drift data to terminal
     ##### END OF USER DEFINED VARIABLES #####
-
-    reservoir_vial = 0 # Number of the reservoir vial
-    lagoon_vial = 1 # Number of the lagoon vial
+    
+    reservoir_vial = 0 # Index of the reservoir vial
+    lagoon_vial = 1 # Index of the lagoon vial
+    selection_pump = 4 # Index of the selection pump
+    drift_pump = 5 # Index of the drift pump
 
     ##### Turbidostat Settings #####
     #Tunable settings for overflow protection, pump scheduling etc. Unlikely to change between expts
@@ -78,28 +90,19 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     #Tunable settings for bolus, etc. Unlikely to change between expts
 
     bolus = 0.5 #mL, can be changed with great caution, 0.2 is absolute minimum
-    bolus_slow = 0.1 #mL, can be changed with great caution, 0.2 is absolute minimum
+    bolus_slow = 0.1 #mL, can be changed with great caution
 
     chemostat_vials = [0, 1] # zero indexed list of vials to trigger chemostat on
     ##### End of Chemostat Settings #####
 
-    ##### Inducer Settings #####
-    lagoon_V_h = rate_config[lagoon_vial] # lagoon Volumes/hr
-
-    inducer_rate = [0,0] # Volumes/hr of inducer - initializing the array - [pump 5, pump 6] 
-    if inducer_concentration[0] != 0:
-        inducer_rate[0] = lagoon_V_h / inducer_concentration[0] #Volumes/hr  
-    if inducer_concentration[1] != 0:
-        inducer_rate[1] = lagoon_V_h / inducer_concentration[1] #Volumes/hr  
-    ##### End of Inducer Settings #####
-
     flow_rate = eVOLVER.get_flow_rate() #read from calibration file
     period_config = [0,0] #initialize array
     bolus_in_s = [0,0] #initialize array - calculated bolus for fast input pumps
-    inducer_period = [0,0] #initialize array - calculated period for slow pumps
-    bolus_slow_in_s = [0,0] #initialize array - calculated bolus for slow pumps
 
-    ##### TURBIDOSTAT CODE BELOW #####
+
+    ################################
+    #### TURBIDOSTAT CODE BELOW ####
+    ################################
 
     # fluidic message: initialized so that no change is sent
     MESSAGE = ['--'] * 6
@@ -177,16 +180,12 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
         else:
             logger.debug('not enough OD measurements for vial %d' % x)
 
-    # send fluidic command only if we are actually turning on any of the pumps
-    if MESSAGE != ['--'] * 6:
-        eVOLVER.fluid_command(MESSAGE)
-
-        # your_FB_function_here() #good spot to call feedback functions for dynamic temperature, stirring, etc for ind. vials
-    # your_function_here() #good spot to call non-feedback functions for dynamic temperature, stirring, etc.
-
     # end of turbidostat() fxn
 
+
+    ################################
     ##### CHEMOSTAT CODE BELOW #####
+    ################################
 
     for x in chemostat_vials: #main loop through each vial
 
@@ -244,20 +243,149 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
         else:
             logger.debug('not enough OD measurements for vial %d' % x)
 
-    # your_function_here() #good spot to call non-feedback functions for dynamic temperature, stirring, etc.
-    if inducer_on:
-        # calculate for inducer 1 - pump 5
-        if inducer_rate[0] != 0:
-            bolus_slow_in_s[0] = bolus_slow / float(flow_rate[4]) #calculate bolus
-            inducer_period[0] = (3600 * bolus_slow)/(inducer_rate[0] * LAGOON_VOLUME) #calculate period
-        
-        # calculate for inducer 2 - pump 6
-        if inducer_rate[1] != 0:
-            bolus_slow_in_s[1] = bolus_slow / float(flow_rate[5]) #calculate bolus
-            inducer_period[1] = (3600 * bolus_slow)/(inducer_rate[1] * LAGOON_VOLUME) #calculate period
+
+    ################################
+    ##### INDUCER CALCULATIONS #####
+    ################################
+    lagoon_V_h = rate_config[lagoon_vial] # lagoon Volumes/hr
+
+    # Function for exponential decay
+    def exponential_decay(flow_rate, conc0, time):
+        return conc0 * math.e ** (-flow_rate * time)
+
+
+    ################
+    ## Drift Code ##
+    ################
+
+    #### Drift Config ####
+    # Construct file name and drift config path
+    file_name = f"vial{lagoon_vial}_drift_config.txt"
+    drift_config_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, 'drift_config', file_name)
+
+    # Load drift config from file
+    drift_config = np.genfromtxt(drift_config_path, delimiter=',')
+    # Get the last configuration from the loaded drift config
+    if drift_config.ndim != 1:
+        last_config = drift_config[-1]
     else:
-        inducer_period = [0,0]
-        bolus_slow_in_s = [0,0]
+        last_config = drift_config
+        
+    # Define the current configuration
+    current_config = np.array([elapsed_time, drift_stock_conc, drift_interval, drift_length, interval_modifier, alternate_selection])
+
+    # Check if drift config has changed
+    if not np.array_equal(current_config[1:], last_config[1:]): # ignore the times, see if arrays are the same
+        # Print and log that drift is updated
+        # print(f'Drift inducer flow started in vial {lagoon_vial}')
+        
+        # logger.info('drift config updated, conc %.2f, interval %.2f, length %.2f, modifier %.2f, alternate_selection %d' % current_config[1:])
+        # Write the updated configuration to the drift config file
+        with open(drift_config_path, "a+") as text_file:
+            line = ','.join(str(config) for config in current_config) # Convert the list to a string with commas as separators
+            text_file.write(line+'\n') # Write the string to the file, including a newline character
+
+    #### Drift Inducer Logic ####
+    drifting = False # initialize variable
+    if elapsed_time >= drift_expt_start and drift_stock_conc != 0: # if drift has started
+        # set drift log path and pull last state from file
+        file_name =  "vial{0}_drift_log.txt".format(lagoon_vial)
+        drift_log_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, 'drift_log', file_name)
+        last_line = eVOLVER.tail_to_np(drift_log_path, 1)[0] # get last line of drift log
+
+        # Drift log variables
+        last_time = last_line[0] # time of last drift calculation
+        last_drift_conc = last_line[1] # in X final concentration, calculated concentration of drift inducer at last time
+        drift_start = last_line[2] # start of last round of drift
+        drift_end = last_line[3] # end of last round of drift
+        interval_count = last_line[4] # number of intervals completed, also used with interval_modifier to set interval length over time
+
+        current_drift_conc = 0 # in X final concentration, calculated concentration of current drift inducer
+
+        # Determine what our drift status is
+        if elapsed_time >= drift_start and drift_end <= drift_start: # Starting drift
+            drift_end = round((drift_start + drift_length), 2) # set the end of the drift
+            if print_drift:
+                print(f'Drift STARTing | Start Time {drift_start} | Current Time {elapsed_time} | End Time {drift_end}')
+            interval_count += 1 # increment the number of intervals completed
+
+            # Calculate an initial bolus to bring the concentration to the target
+            if last_drift_conc < 1: # if the target concentration is higher than current concentration
+                # calculate the bolus size using:: C_stock * V_stock + C_initial * V_initial = C_final * V_final
+                CiVi = last_drift_conc * LAGOON_VOLUME
+                CfVf = 1 * LAGOON_VOLUME # approximate value ignoring volume of stock added
+                bolus = (CfVf - CiVi) / drift_stock_conc # in mL, bolus size of stock to add to induce drift
+                time_in = bolus / float(flow_rate[drift_pump]) # time to add bolus
+                time_in = round(time_in, 2)
+                
+                MESSAGE[drift_pump] = str(time_in) # set the pump message
+                current_drift_conc = 1 # set the current concentration to the target
+                if print_drift:
+                    print(f'Drift inducer bolus added: {round(bolus, 3)}mL | New concentration: {current_drift_conc}')
+
+        elif drift_start <= elapsed_time < drift_end: # We are in a drift cycle
+            if print_drift:
+                print(f'DRIFTING | Start Time {drift_start} | Current Time {elapsed_time} | End Time {drift_end}')
+            drifting = True
+            current_drift_conc  = 1 # (approximate) current concentration of drift, the drift pump chemostat (pump 6) is set to maintain this
+
+        elif elapsed_time >= drift_end: # We are not in a drift cycle
+            drift_interval = drift_interval + interval_modifier * (interval_count - 1) # increase space between cycles each cycle
+            drift_start = round((drift_end + drift_interval), 2) # set the start of the next cycle
+            current_drift_conc = exponential_decay(lagoon_V_h, 1, elapsed_time - drift_end) # approximate concentration of drift inducer
+            if print_drift:
+                print(f'Drift OFF | approximate drift inducer {round(current_drift_conc, 3)}X | Start Time {drift_start} | Current Time {elapsed_time} | End Time {drift_end}')
+
+        # writes drift data to drift_log file, for storage
+        text_file = open(drift_log_path, "a+")
+        text_file.write("{0},{1},{2},{3},{4}\n".format(elapsed_time, current_drift_conc, drift_start, drift_end, interval_count))
+        text_file.close()
+
+    elif drift_stock_conc != 0:
+        logger.debug(f'Drift not initiated, start time {drift_start} | current time {elapsed_time}')
+
+    #### Drift inducer calculations ####
+    drift_rate = 0 # Volumes/hr of inducer - initializing the variable 
+    if drift_stock_conc != 0 and elapsed_time >= drift_expt_start and drifting:
+        #calculate the rate of the inducer
+        drift_rate = lagoon_V_h / drift_stock_conc #Volumes/hr
+
+
+    ####################
+    ## Selection Code ##
+    ####################
+
+    #### Selection inducer calculations ####
+    selection_rate = 0 # Volumes/hr of inducer - initializing the array - [pump 5, pump 6] 
+    if selection_stock_conc != 0 and elapsed_time >= selection_start:
+        selection_rate = lagoon_V_h / selection_stock_conc #Volumes/hr
+    if drifting and alternate_selection: # if we are drifting and we are alternating selection with drift
+        selection_rate = 0 # turn off selection
+    
+
+    ######################################
+    #### General Inducer Calculations ####
+    ######################################
+    inducer_rate = [selection_rate, drift_rate] # Volumes/hr of inducer - initializing the array - [pump 5, pump 6] 
+    bolus_slow_in_s = [0,0] #initialize array - calculated bolus for slow pumps
+    inducer_period = [0,0] #initialize array - calculated period for slow pumps
+
+    # calculate for inducer 1 - pump 5
+    if inducer_rate[0] != 0:
+        bolus_slow_in_s[0] = bolus_slow / float(flow_rate[selection_pump]) #calculate bolus
+        inducer_period[0] = (3600 * bolus_slow)/(inducer_rate[0] * LAGOON_VOLUME) #calculate period
+    
+    # calculate for inducer 2 - pump 6
+    if inducer_rate[1] != 0:
+        bolus_slow_in_s[1] = bolus_slow / float(flow_rate[drift_pump]) #calculate bolus
+        inducer_period[1] = (3600 * bolus_slow)/(inducer_rate[1] * LAGOON_VOLUME) #calculate period
+    
+    ##### End of Inducer Calculations #####
+
+    # send fluidic command only if we are actually turning on any of the pumps
+    if MESSAGE != ['--'] * 6:
+        eVOLVER.fluid_command(MESSAGE)
+
     eVOLVER.update_chemo(input_data, chemostat_vials, bolus_in_s, period_config, bolus_slow_in_s, inducer_period) #compares computed chemostat config to the remote one
     # end of chemostat() fxn
 
