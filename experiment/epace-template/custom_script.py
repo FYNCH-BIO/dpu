@@ -54,16 +54,18 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
     #### Selection Variables ####
     selection_start = 0 # hours, set 0 to start selection immediately
-    selection_stock_conc = 40 # X times final concentration - setting to 0 stops - pump 5
+    selection_stock_conc = 50 # X times final concentration - setting to 0 stops - pump 5
+    # selection_initial_conc =  40 # X times in-vial concentration - setting to 0 stops - pump 5 - 
+    # selection_final_conc = 40 # X times in-vial concentration - setting to 0 stops - pump 5
     # For example: a lagoon with chemostat running at 1 Volumes/hr / 40X inducer stock concentration = 0.025 Volumes/hr of inducer added
     # 0.025 Volumes/hr * 10mL LAGOON_VOLUME = 0.25mL of inducer stock added per hour (however the eVOLVER needs Volumes/hr)
 
     #### Drift Variables ####
     drift_expt_start = 0 # hours, set 0 to start drift immediately
-    drift_stock_conc = 25 # X times final concentration - setting to 0 stops - pump 6
-    drift_interval = .15 # hours; time between periods of drift
-    drift_length = .1 # hours; time that drift is fully on
-    interval_modifier = .05 # hours; additional time added to drift_interval after each drift
+    drift_stock_conc = 50 # X times final concentration - setting to 0 stops - pump 6
+    drift_interval = 8 # hours; time between periods of drift
+    drift_length = 3 # hours; time that drift is fully on
+    interval_modifier = 1 # hours; additional time added to drift_interval after each drift
     
     alternate_selection = True # whether to alternate between selection and drift; selectiion inducer will wash out during drift
     print_drift = True # whether to print drift data to terminal
@@ -249,6 +251,8 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     ################################
     lagoon_V_h = rate_config[lagoon_vial] # lagoon Volumes/hr
 
+    #### Inducer Functions ####
+
     # Function for exponential decay
     def exponential_decay(flow_rate, conc0, time):
         return conc0 * math.e ** (-flow_rate * time)
@@ -273,13 +277,13 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
         
     # Define the current configuration
     current_config = np.array([elapsed_time, drift_stock_conc, drift_interval, drift_length, interval_modifier, alternate_selection])
-
+    config_change = False
     # Check if drift config has changed
     if not np.array_equal(current_config[1:], last_config[1:]): # ignore the times, see if arrays are the same
+        config_change = True
         # Print and log that drift is updated
-        # print(f'Drift inducer flow started in vial {lagoon_vial}')
-        
-        # logger.info('drift config updated, conc %.2f, interval %.2f, length %.2f, modifier %.2f, alternate_selection %d' % current_config[1:])
+        print(f'\nDrift Config updated, conc {current_config[1]}, interval {current_config[2]}, length {current_config[3]}, modifier {current_config[4]}, alternate_selection {current_config[5]}')
+        logger.info(f'Drift Config updated, conc {current_config[1]}, interval {current_config[2]}, length {current_config[3]}, modifier {current_config[4]}, alternate_selection {current_config[5]}')
         # Write the updated configuration to the drift config file
         with open(drift_config_path, "a+") as text_file:
             line = ','.join(str(config) for config in current_config) # Convert the list to a string with commas as separators
@@ -302,8 +306,23 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
         current_drift_conc = 0 # in X final concentration, calculated concentration of current drift inducer
 
-        # Determine what our drift status is
-        if elapsed_time >= drift_start and drift_end <= drift_start: # Starting drift
+        # Config was changed, update start and end times to turn off drift
+        if config_change:
+            drift_end = elapsed_time
+            drift_start = elapsed_time + drift_interval + interval_modifier * (interval_count - 1)
+            print(f'Config change, starting drift OFF cycle | Start Time {drift_start} | Current Time {elapsed_time} | End Time {drift_end}\n')
+            logger.info(f'Config change, starting drift OFF cycle | Start Time {drift_start} | Current Time {elapsed_time} | End Time {drift_end}')
+        
+        # Experiment restart handling
+        elif last_time + 1 < elapsed_time: # if the experiment has restarted after greater than 1 hr
+            # Change the start and end times of the drift to match the new elapsed time
+            drift_start = drift_start + (elapsed_time - last_time) # new start time
+            drift_end = drift_end + (elapsed_time - last_time) # new end time
+            print(f'Drift scheduling resuming | Start Time {drift_start} | Current Time {elapsed_time} | End Time {drift_end}')
+            logger.info('drift scheduling resuming | Start Time %.2f | Current Time %.2f | End Time %.2f' % (drift_start, elapsed_time, drift_end))
+
+        ## Determine what our drift status is ##
+        elif elapsed_time >= drift_start and drift_end <= drift_start: # Starting drift
             drift_end = round((drift_start + drift_length), 2) # set the end of the drift
             if print_drift:
                 print(f'Drift STARTing | Start Time {drift_start} | Current Time {elapsed_time} | End Time {drift_end}')
@@ -321,7 +340,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
                 MESSAGE[drift_pump] = str(time_in) # set the pump message
                 current_drift_conc = 1 # set the current concentration to the target
                 if print_drift:
-                    print(f'Drift inducer bolus added: {round(bolus, 3)}mL | New concentration: {current_drift_conc}')
+                    print(f'Drift inducer bolus added: {round(bolus, 3)}mL | New concentration: {current_drift_conc}X')
 
         elif drift_start <= elapsed_time < drift_end: # We are in a drift cycle
             if print_drift:
@@ -354,6 +373,18 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     ####################
     ## Selection Code ##
     ####################
+
+    # file_name =  "vial{0}_selection_log.txt".format(lagoon_vial)
+    # drift_log_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, 'drift_log', file_name)
+    # last_line = eVOLVER.tail_to_np(drift_log_path, 1)[0] # get last line of drift log
+    # Drift log variables
+    # last_time = last_line[0] # time of last drift calculation
+    # last_selection_conc = last_line[1] # in X final concentration, calculated concentration of selection inducer at last time
+    # target_conc = last_line[2] # in X final concentration, target concentration of selection inducer
+    # change_start = last_line[3] # time of last target_conc change
+    # change_end = change_start + selection 
+
+    # current_selection_conc = 0 # in X final concentration, calculated concentration of current selection inducer
 
     #### Selection inducer calculations ####
     selection_rate = 0 # Volumes/hr of inducer - initializing the array - [pump 5, pump 6] 
