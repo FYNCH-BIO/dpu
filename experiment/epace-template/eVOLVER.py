@@ -420,8 +420,11 @@ class EvolverNamespace(BaseNamespace):
                 self._create_file(x, 'drift_log',
                                   defaults=["0,0,0,0,0"], # format is [elapsed_time, current_drift_conc, drift_start, drift_end, interval_count]
                                   directory='drift_log')   
+                self._create_file(x, 'selection_config',
+                                  defaults=["0,0,0"], # format is [elapsed_time, target_concentration, change_start]
+                                  directory='selection_log')
                 self._create_file(x, 'selection_log',
-                                  defaults=["0,0,0,0"], # format is [elapsed_time, current_concentration, target_concentration, change_start]
+                                  defaults=["0,0,0,0"], # format is [elapsed_time, current_concentration]
                                   directory='selection_log')
 
 
