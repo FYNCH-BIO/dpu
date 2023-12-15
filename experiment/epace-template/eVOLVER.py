@@ -381,6 +381,7 @@ class EvolverNamespace(BaseNamespace):
             os.makedirs(os.path.join(EXP_DIR, 'chemo_config'))
             os.makedirs(os.path.join(EXP_DIR, 'drift_config'))
             os.makedirs(os.path.join(EXP_DIR, 'drift_log'))
+            os.makedirs(os.path.join(EXP_DIR, 'selection_config'))
             os.makedirs(os.path.join(EXP_DIR, 'selection_log'))
 
             setup_logging(log_name, quiet, verbose)
@@ -421,10 +422,10 @@ class EvolverNamespace(BaseNamespace):
                                   defaults=["0,0,0,0,0"], # format is [elapsed_time, current_drift_conc, drift_start, drift_end, interval_count]
                                   directory='drift_log')   
                 self._create_file(x, 'selection_config',
-                                  defaults=["0,0,0"], # format is [elapsed_time, target_concentration, change_start]
-                                  directory='selection_log')
+                                  defaults=["0,0,0,0,0"], # format is [elapsed_time, selection_initial_conc, selection_final_conc, time_to_final, selection_change_start]
+                                  directory='selection_config')
                 self._create_file(x, 'selection_log',
-                                  defaults=["0,0,0,0"], # format is [elapsed_time, current_concentration]
+                                  defaults=["0,0,0,0"], # format is [elapsed_time, current_concentration, selection_time, selection_target]
                                   directory='selection_log')
 
 
