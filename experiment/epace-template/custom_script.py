@@ -53,27 +53,23 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     rate_config = [0.5, 0.5]  #Volumes/hr
 
     #### Selection Variables #### - pump 5
-    selection_start = 0 # hours, set 0 to start selection immediately
+    selection_start = 3 # hours, set 0 to start selection immediately at selection_initial_conc
     selection_stock_conc = 50 # X times minimum in-vial concentration - setting to 0 stops
     selection_initial_conc =  1 # X times in-vial concentration; 1X = minimum selection
     selection_final_conc = 10 # X times in-vial concentration
-    selection_units = 'X'
-    # selection_stock_conc = 250 # default mM - setting to 0 stops
-    # selection_units = 'mM' # default is millimolar concentration
-    # selection_initial_conc = 2 # X times in-vial concentration
-    # selection_final_conc = 1 # X times in-vial concentration
+    selection_units = 'X' # default is X in-vial concentration
     # For example: a lagoon with chemostat running at 1 Volumes/hr / 40X inducer stock concentration = 0.025 Volumes/hr of inducer added
     # 0.025 Volumes/hr * 10mL LAGOON_VOLUME = 0.25mL of inducer stock added per hour (however the eVOLVER needs Volumes/hr)
-    time_to_final = 3 # hours; time until final selection concentration is reached
-    selection_change_start = 0 # hours; time to start changing inducer concentration
+    time_to_final = 72 # hours; time until final selection concentration is reached
+    selection_change_start = 6 # hours; time to start changing inducer concentration
     print_selection = True # whether to print selection data to terminal
 
     #### Drift Variables #### - pump 6
     drift_expt_start = 0 # hours, set 0 to start drift immediately
     drift_stock_conc = 50 # X times final concentration - setting to 0 stops
-    drift_interval = 1 # hours; time between periods of drift
-    drift_length = 0.2 # hours; time that drift is fully on
-    interval_modifier = 0 # hours; additional time added to drift_interval after each drift
+    drift_interval = 8 # hours; time between periods of drift
+    drift_length = 3 # hours; time that drift is fully on
+    interval_modifier = 1 # hours; additional time added to drift_interval after each drift
     
     alternate_selection = True # whether to alternate between selection and drift; selectiion inducer will wash out during drift
     print_drift = True # whether to print drift data to terminal
@@ -110,6 +106,10 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     period_config = [0,0] #initialize array
     bolus_in_s = [0,0] #initialize array - calculated bolus for fast input pumps
 
+    ##### Inducer Settings #####
+    step_increment = 0.2 # hours; time between each selection level change
+    max_gap = 0.05 # hours; there is a gap greater than this time (ie for drift or a pause in experiment), the time doesn't count towards selection time
+    ##### End of Inducer Settings #####
 
     ################################
     #### TURBIDOSTAT CODE BELOW ####
@@ -430,8 +430,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     ####################
     ## Selection Code ##
     ####################
-    step_increment = 0.2 # hours; time between each selection level change
-    max_gap = 0.05 # hours; there is a gap greater than this time (ie for drift or a pause in experiment), the time doesn't count towards selection time
+    selection_rate = 0 # Volumes/hour
     
     #### Selection Config Handling ####
     current_config = np.array([elapsed_time, selection_initial_conc, selection_final_conc, time_to_final, selection_change_start]) # Define the current configuration
@@ -454,35 +453,34 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
         last_selection_conc = last_line[1]  # in X final concentration, calculated concentration of selection inducer at last time
         last_selection_time = last_line[2] # total time spent in this selection scheme
         last_selection_target = last_line[3] # target concentration of selection inducer
-        # initialize variables
-        selection_rate = 0 # Volumes/hour
-        current_selection_conc = 0 
-        selection_time = 0 # hours; total time spent on this selection increment
+        # Initialize variables
+        current_selection_conc = last_selection_conc 
         if last_selection_target != 0:
             selection_target = last_selection_target # in-vial concentration to reach in a given selection increment
         else:
-            selection_target = selection_initial_conc
-    
+            selection_target = selection_initial_conc        
+        # Initialize selection time; counter for total time spent on this selection increment
+        if config_change: # If we changed the config
+            selection_time = 0  # reset the selection time
+        else:
+            selection_time = last_selection_time
+        # Check if there was a time gap
+        time_diff = elapsed_time - last_time # time since last selection log
+        if time_diff > max_gap: # if there was a time gap
+            time_diff = 0
+                    
         ## Selection logic ##
         # If we are drifting and we are alternating selection with drift
-        if drifting and alternate_selection:
+        if drifting and alternate_selection: # Do not alter selection_rate (selection_rate = 0)
             # Calculate the current selection concentration as exponential decay
-            current_selection_conc = exponential(-lagoon_V_h, last_selection_conc, last_selection_time - elapsed_time)
-            selection_rate = 0  # turn off selection
-            selection_target = last_selection_target
+            current_selection_conc = exponential(-lagoon_V_h, last_selection_conc, time_diff) # exponential decay
             if print_selection:
                 print(f'Selection OFF | approximate selection concentration: {round(current_selection_conc, 4)}X')
                 logger.info(f'Selection OFF | approximate selection concentration: {round(current_selection_conc, 4)}X')
 
-        # If we are changing selection
-        elif elapsed_time >= selection_change_start and selection_final_conc != selection_initial_conc:  
-            # Update selection time
-            if config_change: # If we changed the config
-                selection_time = 0  # reset the selection time
-            elif elapsed_time - last_time > max_gap: # If there was a time gap
-                selection_time = last_selection_time # don't add to the selection time
-            else: # add the time elapsed to the selection time total
-                selection_time = last_selection_time + (elapsed_time - last_time) 
+        # If we are currently changing selection
+        elif elapsed_time >= selection_change_start and selection_final_conc != selection_initial_conc:
+            selection_time += time_diff # add the time elapsed to the selection time total
 
             # Update the selection target
             if last_selection_target > selection_final_conc: # if the target is greater than the final
@@ -498,7 +496,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
             
             # Calculate the current selection concentration
             selection_rate = (lagoon_V_h / selection_stock_conc) * selection_target #Volumes/hr
-            current_selection_conc = inducer_concentration(lagoon_V_h, last_selection_conc, selection_target, elapsed_time - last_time)
+            current_selection_conc = inducer_concentration(lagoon_V_h, last_selection_conc, selection_target, time_diff)
             if print_selection:
                 print(f'Selecting, approximate concentration: {round(current_selection_conc, 3)}X, selection_rate: {round(selection_rate, 3)}V/hr | selection_target: {round(selection_target, 3)}X')
                 logger.info(f'Selecting, approximate concentration: {round(current_selection_conc, 3)}X')
