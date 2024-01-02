@@ -379,6 +379,7 @@ class EvolverNamespace(BaseNamespace):
             os.makedirs(os.path.join(EXP_DIR, 'ODset'))
             os.makedirs(os.path.join(EXP_DIR, 'growthrate'))
             os.makedirs(os.path.join(EXP_DIR, 'chemo_config'))
+            os.makedirs(os.path.join(EXP_DIR, 'chemo_log'))
             os.makedirs(os.path.join(EXP_DIR, 'drift_config'))
             os.makedirs(os.path.join(EXP_DIR, 'drift_log'))
             os.makedirs(os.path.join(EXP_DIR, 'selection_config'))
@@ -412,9 +413,12 @@ class EvolverNamespace(BaseNamespace):
                                   directory='growthrate')
                 # make chemostat file
                 self._create_file(x, 'chemo_config',
-                                  defaults=["0,0,0",
-                                            "0,0,0"],
+                                  defaults=["0,0,0"], # format is [elapsed_time, chemo_initial_rate[x], chemo_final_rate[x], time_to_final[x]]
                                   directory='chemo_config')
+                # make chemostat file
+                self._create_file(x, 'chemo_log',
+                                  defaults=["0,0,0"], # format is [elapsed_time, current_chemo_rate, step_time]
+                                  directory='chemo_log')
                 self._create_file(x, 'drift_config',
                                   defaults=["0,0,0,0,0,0"], # format is [elapsed_time, drift_stock_conc, drift_interval, drift_length, interval_modifier, alternate_selection]
                                   directory='drift_config')

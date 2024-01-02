@@ -44,15 +44,18 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
     ##### USER DEFINED VARIABLES #####
 
-    # Turbidostat Variables
-    lower_thresh = [0.9, 0] # set the lower OD threshold of the reservoir (0 for chemostat)
-    upper_thresh = [0.95, 0] # set the upper OD threshold of the reservoir (0 for chemostat)
+    ## Turbidostat Variables ##
+    lower_thresh = [0.9, 0] # set the lower OD threshold of the reservoir (0 for lagoon)
+    upper_thresh = [0.95, 0] # set the upper OD threshold of the reservoir (0 for lagoon)
     
-    # Chemostat Variables
+    ## Chemostat Variables ##
     start_time = [0, 0] #hours, set 0 to start immediately
-    rate_config = [0.5, 0.5]  #Volumes/hr
+    chemo_initial_rate = [0.5, 0.5]  #Volumes/hr; Initial chemostat flow rate (same for reservoir)
+    chemo_final_rate = [0.5, 3] #Volumes/hr; Final chemostat flow rate (same for reservoir)
+    chemo_time_to_final = [0, 100] # hours; time until final flow rate is reached
+    print_chemo = True # whether to print chemo data to terminal
 
-    #### Selection Variables #### - pump 5
+    ## Selection Variables ## - pump 5
     selection_start = 3 # hours, set 0 to start selection immediately at selection_initial_conc
     selection_stock_conc = 50 # X times minimum in-vial concentration - setting to 0 stops
     selection_initial_conc =  1 # X times in-vial concentration; 1X = minimum selection
@@ -64,7 +67,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     selection_change_start = 6 # hours; time to start changing inducer concentration
     print_selection = True # whether to print selection data to terminal
 
-    #### Drift Variables #### - pump 6
+    ## Drift Variables ## - pump 6
     drift_expt_start = 0 # hours, set 0 to start drift immediately
     drift_stock_conc = 50 # X times final concentration - setting to 0 stops
     drift_interval = 8 # hours; time between periods of drift
@@ -76,40 +79,143 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
     ##### END OF USER DEFINED VARIABLES #####
     
+    ## Indices ##
     reservoir_vial = 0 # Index of the reservoir vial
     lagoon_vial = 1 # Index of the lagoon vial
     selection_pump = 4 # Index of the selection pump (number of pump is 5)
     drift_pump = 5 # Index of the drift pump (number of pump is 6)
 
-    ##### Turbidostat Settings #####
-    #Tunable settings for overflow protection, pump scheduling etc. Unlikely to change between expts
+    ## General Fluidics Settings ##
+    bolus_fast = 0.5 #mL, can be changed with great caution, 0.2 is absolute minimum
+    bolus_slow = 0.1 #mL, can be changed with great caution
 
+    step_increment = 0.2 # hours; time between each flow rate change
+    max_gap = 0.05 # hours; there is a gap greater than this time (ie for drift or a pause in experiment), the time doesn't count towards selection time
+    ## End of General Fluidics Settings ##
+
+    ## Turbidostat Settings ##
+    #Tunable settings for overflow protection, pump scheduling etc. Unlikely to change between expts
     time_out = 8 #(sec) additional amount of time to run efflux pump
     pump_wait = 3 # (min) minimum amount of time to wait between pump events
     turbidostat_vials = [reservoir_vial] # zero indexed list of vials to trigger turbidostat on
 
     stop_after_n_curves = np.inf #set to np.inf to never stop, or integer value to stop diluting after certain number of growth curves
     OD_values_to_average = 6  # Number of values to take in to calculate the OD average
+    ## End of Turbidostat Settings ##
 
-    ##### End of Turbidostat Settings #####
-
-    ##### Chemostat Settings #####
+    ## Chemostat Settings ##
     #Tunable settings for bolus, etc. Unlikely to change between expts
 
-    bolus = 0.5 #mL, can be changed with great caution, 0.2 is absolute minimum
-    bolus_slow = 0.1 #mL, can be changed with great caution
-
     chemostat_vials = [0, 1] # zero indexed list of vials to trigger chemostat on
-    ##### End of Chemostat Settings #####
+    ## End of Chemostat Settings ##
 
     flow_rate = eVOLVER.get_flow_rate() #read from calibration file
     period_config = [0,0] #initialize array
     bolus_in_s = [0,0] #initialize array - calculated bolus for fast input pumps
+    current_chemo_rate = [0,0] #initialize array - rate of chemostat flow at current time
 
-    ##### Inducer Settings #####
-    step_increment = 0.2 # hours; time between each selection level change
-    max_gap = 0.05 # hours; there is a gap greater than this time (ie for drift or a pause in experiment), the time doesn't count towards selection time
-    ##### End of Inducer Settings #####
+
+    ##################################
+    #### GENERAL HELPER FUNCTIONS ####
+    ##################################
+    def get_last_line(var_name, vial):
+        """
+        Retrieves the last line of the file for a given variable name and vial number.
+        Args:
+            var_name (str): The name of the variable.
+            vial (int): The vial number.
+        Returns:
+            tuple or numpy.ndarray: Returns the last line of the file and the path to the file.
+        """
+        # Construct file name and path
+        file_name = f"vial{vial}_{var_name}.txt"
+        file_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, f'{var_name}', file_name)
+        # Load last line from file
+        file = eVOLVER.tail_to_np(file_path, 1)[0] # get last line
+        # Get the last line from the loaded file
+        if file.ndim != 1:
+            return file_path,file[-1]
+        else:
+            return file_path,file
+
+    def compare_configs(var_name, vial, current_config):
+        """
+        Compare the current configuration with the last configuration for a given variable and vial.
+        Args:
+            var_name (str): The name of the variable.
+            vial (int): The name of the vial.
+            current_config (list): The current configuration.
+        Returns:
+            bool: True if the current configuration is different from the last configuration, False otherwise.
+        """
+        config_path,last_config = get_last_line(var_name+'_config', vial) # get last configuration and path
+        # Check if config has changed
+        if not np.array_equal(last_config[1:], current_config[1:]): # ignore the times, see if arrays are the same
+            # Write the updated configuration to the config file
+            with open(config_path, "a+") as text_file:
+                line = ','.join(str(config) for config in current_config) # Convert the list to a string with commas as separators
+                text_file.write(line+'\n') # Write the string to the file, including a newline character
+            return True # If the arrays are not the same, return True
+        else:
+            return False # If the arrays are the same, return False
+
+    # Function for exponential decay
+    def exponential(flow_rate, conc0, time):
+        """
+        Calculate the exponential growth / decay of a substance over time.
+        Args:
+            flow_rate (float): The lagoon flow rate. Negative for decay, positive for growth.
+            conc0 (float): The initial concentration of the substance.
+            time (float): The time period over which the growth is calculated.
+        Returns:
+            float: The final concentration of the substance after the given time period.
+        """
+        return conc0 * math.e ** (flow_rate * time)
+    
+    def inducer_concentration(flow_rate, conc0, conc_eq, time):
+        """
+        Calculate the concentration of the inducer in a chemostat at time t.
+        Args:
+            flow_rate (float): The lagoon flow rate.
+            conc0 (float): Initial concentration of the inducer, in X at t0.
+            conc_eq (float): Final (equilibrium) concentration, in X.
+            time (float): Current time in hours since t0.
+        Returns:
+            float: Concentration of the inducer at time t, in X.
+        """
+        return conc_eq + (conc0 - conc_eq) * np.exp(-flow_rate * time)
+        
+    def stepped_rate_modification(step_time, step_increment, initial_value, final_value, time_to_final, current_rate):
+        """
+        Calculates the new target flow rate for a fluid based on the time passed since the last step.
+        Args:
+            step_time (float): Time since last flow rate change, in hours.
+            step_increment (float): Time between each flow rate change, in hours.
+            initial_value (float): Initial flow rate value.
+            final_value (float): Final target flow rate value.
+            time_to_final (float): Total time to reach the final value from the initial value, in hours.
+            current_rate (float): Current flow rate value.
+        Returns:
+            tuple: The new target flow rate ('new_rate') and the updated step time ('step_time').
+        """
+        if initial_value == final_value:
+            raise ValueError("Initial value and final value should not be equal.")
+        if step_time < 0 or step_increment <= 0 or time_to_final <= 0:
+            raise ValueError("Time values must be positive.")
+
+        # Check if the current rate is already at or beyond the final value
+        if (initial_value < final_value and current_rate >= final_value) or (initial_value > final_value and current_rate <= final_value):
+            return final_value, step_time
+
+        # Calculate new rate if step_time is sufficient for a rate change
+        if step_time >= step_increment:
+            slope = (final_value - initial_value) / time_to_final
+            increment = slope * step_time
+            new_rate = current_rate + increment
+            return new_rate, 0
+
+        return current_rate, step_time # if nothing else, return the same target and time
+
 
     ################################
     #### TURBIDOSTAT CODE BELOW ####
@@ -199,137 +305,78 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     ################################
 
     for x in chemostat_vials: #main loop through each vial
+        ## Chemostat Config Handling ##
+        # Check if chemostat config has changed
+        current_config = [elapsed_time, chemo_initial_rate[x], chemo_final_rate[x], chemo_time_to_final[x]]
+        config_change = compare_configs('chemo', x, current_config) # Check if config has changed and write to file if it has
+        # Print and log the drift config is updated
+        if config_change:
+            print("chemostat config changed at {0}".format(elapsed_time))
+            logger.info("chemostat config changed at {0}".format(elapsed_time))
 
-        # Update chemostat configuration files for each vial
+        ## Chemostat Log Handling ##
+        # set chemostat config path and pull current state from file
+        chemolog_path,chemo_log = get_last_line('chemo_log', x)
+        last_time = chemo_log[0] #should t=0 initially, changes each time a new command is written to file
+        last_rate = chemo_log[1] #Volumes/hr; chemostat flow rate
+        last_step_time = chemo_log[2] # hours; time since last flow rate change
 
-        #initialize OD and find OD path
-        file_name =  "vial{0}_OD.txt".format(x)
-        OD_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, 'OD', file_name)
-        data = eVOLVER.tail_to_np(OD_path, OD_values_to_average)
-        average_OD = 0
-        #enough_ODdata = (len(data) > 7) #logical, checks to see if enough data points (couple minutes) for sliding window
-
-        if data.size != 0: #waits for seven OD measurements (couple minutes) for sliding window
-
-            #calculate median OD
-            od_values_from_file = data[:,1]
-            average_OD = float(np.median(od_values_from_file))
-
-            # set chemostat config path and pull current state from file
-            file_name =  "vial{0}_chemo_config.txt".format(x)
-            chemoconfig_path = os.path.join(eVOLVER.exp_dir, EXP_NAME,
-                                            'chemo_config', file_name)
-            chemo_config = np.genfromtxt(chemoconfig_path, delimiter=',')
-            last_chemoset = chemo_config[len(chemo_config)-1][0] #should t=0 initially, changes each time a new command is written to file
-            last_chemophase = chemo_config[len(chemo_config)-1][1] #should be zero initially, changes each time a new command is written to file
-            last_chemorate = chemo_config[len(chemo_config)-1][2] #should be 0 initially, then period in seconds after new commands are sent
-
-            # once start time has passed and culture hits start OD, if no command has been written, write new chemostat command to file
-            if elapsed_time > start_time[x]:
-
-                #calculate time needed to pump bolus for each pump
-                bolus_in_s[x] = bolus/flow_rate[x + 2]
-                
-
-                # calculate the period (i.e. frequency of dilution events) based on user specified growth rate and bolus size
-                if rate_config[x] > 0:
-                    if x == reservoir_vial: # volume is set depending on the vial type
-                        volume = VOLUME
-                    else:
-                        volume = LAGOON_VOLUME
-                    period_config[x] = (3600*bolus)/((rate_config[x])*volume) #scale dilution rate by bolus size and volume
-                else: # if no dilutions needed, then just loops with no dilutions
-                    period_config[x] = 0
-
-                if  (last_chemorate != period_config[x]):
-                    print('Chemostat updated in vial {0}'.format(x))
-                    logger.info('chemostat initiated for vial %d, period %.2f'
-                                % (x, period_config[x]))
-                    # writes command to chemo_config file, for storage
-                    text_file = open(chemoconfig_path, "a+")
-                    text_file.write("{0},{1},{2}\n".format(elapsed_time,
-                                                           (last_chemophase+1),
-                                                           period_config[x])) #note that this changes chemophase
-                    text_file.close()
+        ## Initialize Variables ##
+        if last_rate != 0:
+            current_chemo_rate[x] = last_rate # in-vial concentration to reach in a given selection increment
         else:
-            logger.debug('not enough OD measurements for vial %d' % x)
+            current_chemo_rate[x] = chemo_initial_rate[x] # Volumes/hr; Initial chemostat flow rate
+        if config_change: # If we changed the config
+            step_time = 0  # reset the step time
+        else:
+            step_time = last_step_time # step time is the same as the last step time
+
+        ## Chemostat Logic ##
+        if elapsed_time >= start_time[x]: # Are we starting chemostat?
+            # calculate the period (i.e. frequency of dilution events) based on user specified growth rate and bolus size
+            if x == reservoir_vial: # volume is set depending on the vial type
+                volume = VOLUME
+            else:
+                volume = LAGOON_VOLUME
+            #calculate time needed to pump bolus for each pump
+            bolus_in_s[x] = bolus_fast/flow_rate[x + 2]
+
+            # If we are linearly changing chemostat flow rate
+            if chemo_final_rate[x] != chemo_initial_rate[x]:
+                # Check if there was a time gap
+                time_diff = elapsed_time - last_time # time since last selection log
+                if time_diff > max_gap: # if there was a time gap
+                    time_diff = 0
+                step_time += time_diff # time since last flow rate change
+                # Modify flow rate and step time
+                current_chemo_rate[x], step_time = stepped_rate_modification(step_time, step_increment,
+                                                                            chemo_initial_rate[x], chemo_final_rate[x],
+                                                                            chemo_time_to_final[x], current_chemo_rate[x])
+                print(f'step_time: {step_time}')
+                if current_chemo_rate[x] != last_rate and print_chemo:
+                    print(f'\nNew chemostat rate in vial {x}: {round(current_chemo_rate[x], 3)}\n')
+                    logger.info(f'\nNew chemostat rate in vial {x}: {round(current_chemo_rate[x], 3)}\n')
+                # Write to chemo_log file for storage
+                text_file = open(chemolog_path, "a+")
+                text_file.write(f'{elapsed_time},{current_chemo_rate[x]},{step_time}\n')
+                text_file.close()
+
+            # Calculate the current chemo period
+            if current_chemo_rate[x] > 0:
+                period_config[x] = (3600*bolus_fast)/((current_chemo_rate[x])*volume) #scale dilution rate by bolus size and volume
+            else:
+                period_config[x] = 0
+            
+            # Print Results
+            if print_chemo:
+                print(f'Chemostat Rate in vial {x}: {round(current_chemo_rate[x], 3)}X, period: {round(period_config[x], 3)}s, bolus (per period): {round(bolus_in_s[x], 3)}s')
+                logger.info(f'Chemostat Rate in vial {x}: {round(current_chemo_rate[x], 3)}X, period: {round(period_config[x], 3)}s, bolus (per period): {round(bolus_in_s[x], 3)}s')
 
 
     ################################
     ##### INDUCER CALCULATIONS #####
     ################################
-    lagoon_V_h = rate_config[lagoon_vial] # lagoon Volumes/hr
-
-    #### Inducer Functions ####
-    def get_last_config(var_name, vial):
-        """
-        Retrieves the last configuration for a given variable name and vial number.
-        Args:
-            var_name (str): The name of the variable.
-            vial (int): The vial number.
-        Returns:
-            tuple or numpy.ndarray: If the loaded configuration has more than one dimension, 
-                returns the last configuration and the path to the configuration file. 
-                Otherwise, returns the configuration and the path to the configuration file.
-        """
-        # Construct file name and config path
-        file_name = f"vial{vial}_{var_name}_config.txt"
-        config_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, f'{var_name}_config', file_name)
-
-        # Load config from file
-        config = np.genfromtxt(config_path, delimiter=',')
-        # Get the last configuration from the loaded config
-        if config.ndim != 1:
-            return config_path,config[-1]
-        else:
-            return config_path,config
-
-    def compare_configs(var_name, vial, current_config):
-        """
-        Compare the current configuration with the last configuration for a given variable and vial.
-        Args:
-            var_name (str): The name of the variable.
-            vial (int): The name of the vial.
-        Returns:
-            bool: True if the current configuration is different from the last configuration, False otherwise.
-        """
-        config_path,last_config = get_last_config(var_name, vial) # get last configuration and path
-        # Check if config has changed
-        if not np.array_equal(last_config[1:], current_config[1:]): # ignore the times, see if arrays are the same
-            # Write the updated configuration to the config file
-            with open(config_path, "a+") as text_file:
-                line = ','.join(str(config) for config in current_config) # Convert the list to a string with commas as separators
-                text_file.write(line+'\n') # Write the string to the file, including a newline character
-            return True # If the arrays are not the same, return True
-        else:
-            return False # If the arrays are the same, return False
-
-    # Function for exponential decay
-    def exponential(flow_rate, conc0, time):
-        """
-        Calculate the exponential growth / decay of a substance over time.
-        Args:
-            flow_rate (float): The lagoon flow rate. Negative for decay, positive for growth.
-            conc0 (float): The initial concentration of the substance.
-            time (float): The time period over which the growth is calculated.
-        Returns:
-            float: The final concentration of the substance after the given time period.
-        """
-        return conc0 * math.e ** (flow_rate * time)
-    
-    def inducer_concentration(flow_rate, conc0, conc_eq, time):
-        """
-        Calculate the concentration of the inducer in a chemostat at time t.
-        Args:
-            flow_rate (float): The lagoon flow rate.
-            conc0 (float): Initial concentration of the inducer, in X at t0.
-            conc_eq (float): Final (equilibrium) concentration, in X.
-            time (float): Current time in hours since t0.
-        Returns:
-            float: Concentration of the inducer at time t, in X.
-        """
-        return conc_eq + (conc0 - conc_eq) * np.exp(-flow_rate * time)
-
+    lagoon_V_h = current_chemo_rate[lagoon_vial] # lagoon Volumes/hr; initialize variable
 
     ################
     ## Drift Code ##
@@ -390,14 +437,14 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
                 # calculate the bolus size using:: C_stock * V_stock + C_initial * V_initial = C_final * V_final
                 CiVi = last_drift_conc * LAGOON_VOLUME
                 CfVf = 1 * LAGOON_VOLUME # approximate value ignoring volume of stock added
-                bolus = (CfVf - CiVi) / drift_stock_conc # in mL, bolus size of stock to add to induce drift
-                time_in = bolus / float(flow_rate[drift_pump]) # time to add bolus
+                calculated_bolus = (CfVf - CiVi) / drift_stock_conc # in mL, bolus size of stock to add to induce drift
+                time_in = calculated_bolus / float(flow_rate[drift_pump]) # time to add bolus
                 time_in = round(time_in, 3)
                 
                 MESSAGE[drift_pump] = str(time_in) # set the pump message
                 current_drift_conc = 1 # set the current concentration to the target
                 if print_drift:
-                    print(f'Drift inducer bolus added: {round(bolus, 3)}mL | New concentration: {current_drift_conc}X')
+                    print(f'Drift inducer bolus added: {round(calculated_bolus, 3)}mL | New concentration: {current_drift_conc}X')
 
         elif drift_start <= elapsed_time < drift_end: # We are in a drift cycle
             if print_drift:
@@ -436,7 +483,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     current_config = np.array([elapsed_time, selection_initial_conc, selection_final_conc, time_to_final, selection_change_start]) # Define the current configuration
     config_change = compare_configs('selection', lagoon_vial, current_config) # Check if config has changed and write to file if it has
 
-    # Print and log the drift config is updated
+    # Print and log the selection config is updated
     if config_change:
         print(f'\nSelection Config updated, selection_initial_conc {current_config[1]}, selection_final_conc {current_config[2]}, time_to_final {current_config[3]}, change_start {current_config[4]}')
         logger.info(f'\nSelection Config updated, selection_initial_conc {current_config[1]}, selection_final_conc {current_config[2]}, time_to_final {current_config[3]}, change_start {current_config[4]}')
@@ -453,7 +500,8 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
         last_selection_conc = last_line[1]  # in X final concentration, calculated concentration of selection inducer at last time
         last_selection_time = last_line[2] # total time spent in this selection scheme
         last_selection_target = last_line[3] # target concentration of selection inducer
-        # Initialize variables
+
+        ## Initialize Variables ##
         current_selection_conc = last_selection_conc 
         if last_selection_target != 0:
             selection_target = last_selection_target # in-vial concentration to reach in a given selection increment
