@@ -49,32 +49,24 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     upper_thresh = [0.95, 0] # set the upper OD threshold of the reservoir (0 for lagoon)
     
     ## Chemostat Variables ##
-    start_time = [0, 0] #hours, set 0 to start immediately
-    chemo_initial_rate = [0.5, 0.5]  #Volumes/hr; Initial chemostat flow rate (same for reservoir)
-    chemo_final_rate = [0.5, 3] #Volumes/hr; Final chemostat flow rate (same for reservoir)
-    chemo_time_to_final = [0, 100] # hours; time until final flow rate is reached
-    print_chemo = True # whether to print chemo data to terminal
+    start_time = [0, 0] # experiment time in hours; set 0 to start immediately
+    chemo_initial_rate = [0.5, 0.5]  # Volumes/hr; Initial chemostat flow rate (same for reservoir)
+    chemo_final_rate = [0.5, 2] # Volumes/hr; Final chemostat flow rate (same for reservoir)
+    chemo_time_to_final = [0, 100] # experiment time in hours; time until final flow rate is reached
+    print_chemo = True # whether to print chemostat data to terminal
 
-    ## Selection Variables ## - pump 5
-    selection_start = 3 # hours, set 0 to start selection immediately at selection_initial_conc
-    selection_stock_conc = 50 # X times minimum in-vial concentration - setting to 0 stops
-    selection_initial_conc =  1 # X times in-vial concentration; 1X = minimum selection
-    selection_final_conc = 10 # X times in-vial concentration
-    selection_units = 'X' # default is X in-vial concentration
+    ## Inducer 1 Variables ## - pump 5
+    inducer1_start = 0 # experiment time in hours; set 0 to start immediately
+    inducer1_stock_conc = 50 # X times minimum in-vial concentration - setting to 0 stops
     # For example: a lagoon with chemostat running at 1 Volumes/hr / 40X inducer stock concentration = 0.025 Volumes/hr of inducer added
     # 0.025 Volumes/hr * 10mL LAGOON_VOLUME = 0.25mL of inducer stock added per hour (however the eVOLVER needs Volumes/hr)
-    time_to_final = 72 # hours; time until final selection concentration is reached
-    selection_change_start = 6 # hours; time to start changing inducer concentration
-    print_selection = True # whether to print selection data to terminal
 
     ## Drift Variables ## - pump 6
-    drift_expt_start = 0 # hours, set 0 to start drift immediately
+    drift_expt_start = 0 # experiment time in hours, set 0 to start drift immediately
     drift_stock_conc = 50 # X times final concentration - setting to 0 stops
     drift_interval = 8 # hours; time between periods of drift
     drift_length = 3 # hours; time that drift is fully on
     interval_modifier = 1 # hours; additional time added to drift_interval after each drift
-    
-    alternate_selection = True # whether to alternate between selection and drift; selectiion inducer will wash out during drift
     print_drift = True # whether to print drift data to terminal
 
     ##### END OF USER DEFINED VARIABLES #####
@@ -82,7 +74,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     ## Indices ##
     reservoir_vial = 0 # Index of the reservoir vial
     lagoon_vial = 1 # Index of the lagoon vial
-    selection_pump = 4 # Index of the selection pump (number of pump is 5)
+    inducer1_pump = 4 # Index of the inducer1 pump (number of pump is 5)
     drift_pump = 5 # Index of the drift pump (number of pump is 6)
 
     ## General Fluidics Settings ##
@@ -90,7 +82,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     bolus_slow = 0.1 #mL, can be changed with great caution
 
     step_increment = 0.2 # hours; time between each flow rate change
-    max_gap = 0.05 # hours; there is a gap greater than this time (ie for drift or a pause in experiment), the time doesn't count towards selection time
+    max_gap = 0.05 # hours; time gap to ignore for flow rate changes (ie a pause in experiment)
     ## End of General Fluidics Settings ##
 
     ## Turbidostat Settings ##
@@ -114,6 +106,15 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     bolus_in_s = [0,0] #initialize array - calculated bolus for fast input pumps
     current_chemo_rate = [0,0] #initialize array - rate of chemostat flow at current time
 
+    ## Advanced Inducer 1 Settings ##
+    # Variables for linearly changing inducer1 concentration over time
+    inducer1_initial_conc =  1 # X times in-vial concentration; 1X = minimum inducer1
+    inducer1_final_conc = 1 # X times in-vial concentration
+    time_to_final = 100 # experiment time in hours; time until final inducer1 concentration is reached
+    inducer1_change_start = 6 #  experiment time in hours; time to start changing inducer concentration
+    print_inducer1 = False # whether to print inducer1 data to terminal
+    alternate_inducer1 = False # whether to alternate between inducer1 and drift; inducer 1 will wash out during drift
+    
 
     ##################################
     #### GENERAL HELPER FUNCTIONS ####
@@ -323,7 +324,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
         ## Initialize Variables ##
         if last_rate != 0:
-            current_chemo_rate[x] = last_rate # in-vial concentration to reach in a given selection increment
+            current_chemo_rate[x] = last_rate # in-vial concentration to reach in a given inducer1 increment
         else:
             current_chemo_rate[x] = chemo_initial_rate[x] # Volumes/hr; Initial chemostat flow rate
         if config_change: # If we changed the config
@@ -344,7 +345,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
             # If we are linearly changing chemostat flow rate
             if chemo_final_rate[x] != chemo_initial_rate[x]:
                 # Check if there was a time gap
-                time_diff = elapsed_time - last_time # time since last selection log
+                time_diff = elapsed_time - last_time # time since last inducer1 log
                 if time_diff > max_gap: # if there was a time gap
                     time_diff = 0
                 step_time += time_diff # time since last flow rate change
@@ -352,7 +353,6 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
                 current_chemo_rate[x], step_time = stepped_rate_modification(step_time, step_increment,
                                                                             chemo_initial_rate[x], chemo_final_rate[x],
                                                                             chemo_time_to_final[x], current_chemo_rate[x])
-                print(f'step_time: {step_time}')
                 if current_chemo_rate[x] != last_rate and print_chemo:
                     print(f'\nNew chemostat rate in vial {x}: {round(current_chemo_rate[x], 3)}\n')
                     logger.info(f'\nNew chemostat rate in vial {x}: {round(current_chemo_rate[x], 3)}\n')
@@ -383,13 +383,13 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     ################
 
     #### Drift Config Handling ####
-    current_config = np.array([elapsed_time, drift_stock_conc, drift_interval, drift_length, interval_modifier, alternate_selection]) # Define the current configuration
+    current_config = np.array([elapsed_time, drift_stock_conc, drift_interval, drift_length, interval_modifier, alternate_inducer1]) # Define the current configuration
     config_change = compare_configs('drift', lagoon_vial, current_config) # Check if config has changed and write to file if it has
 
     # Print and log the drift config is updated
     if config_change:
-        print(f'\nDrift Config updated, conc {current_config[1]}, interval {current_config[2]}, length {current_config[3]}, modifier {current_config[4]}, alternate_selection {current_config[5]}')
-        logger.info(f'Drift Config updated, conc {current_config[1]}, interval {current_config[2]}, length {current_config[3]}, modifier {current_config[4]}, alternate_selection {current_config[5]}')
+        print(f'\nDrift Config updated, conc {current_config[1]}, interval {current_config[2]}, length {current_config[3]}, modifier {current_config[4]}, alternate_inducer1 {current_config[5]}')
+        logger.info(f'Drift Config updated, conc {current_config[1]}, interval {current_config[2]}, length {current_config[3]}, modifier {current_config[4]}, alternate_inducer1 {current_config[5]}')
 
     #### Drift Inducer Logic ####
     drifting = False # initialize variable
@@ -475,102 +475,103 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
 
     ####################
-    ## Selection Code ##
+    ## Inducer 1 Code ##
     ####################
-    selection_rate = 0 # Volumes/hour
+    inducer1_rate = 0 # Volumes/hour
     
-    #### Selection Config Handling ####
-    current_config = np.array([elapsed_time, selection_initial_conc, selection_final_conc, time_to_final, selection_change_start]) # Define the current configuration
-    config_change = compare_configs('selection', lagoon_vial, current_config) # Check if config has changed and write to file if it has
+    #### Inducer 1 Config Handling ####
+    current_config = np.array([elapsed_time, inducer1_initial_conc, inducer1_final_conc, time_to_final, inducer1_change_start]) # Define the current configuration
+    config_change = compare_configs('inducer1', lagoon_vial, current_config) # Check if config has changed and write to file if it has
 
-    # Print and log the selection config is updated
+    # Print and log the inducer1 config is updated
     if config_change:
-        print(f'\nSelection Config updated, selection_initial_conc {current_config[1]}, selection_final_conc {current_config[2]}, time_to_final {current_config[3]}, change_start {current_config[4]}')
-        logger.info(f'\nSelection Config updated, selection_initial_conc {current_config[1]}, selection_final_conc {current_config[2]}, time_to_final {current_config[3]}, change_start {current_config[4]}')
+        if print_inducer1:
+            print(f'\nInducer 1 Config updated, inducer1_initial_conc {current_config[1]}, inducer1_final_conc {current_config[2]}, time_to_final {current_config[3]}, change_start {current_config[4]}')
+        logger.info(f'\nInducer 1 Config updated, inducer1_initial_conc {current_config[1]}, inducer1_final_conc {current_config[2]}, time_to_final {current_config[3]}, change_start {current_config[4]}')
     
-    #### Selection Inducer Logic ####
-    if elapsed_time >= selection_start and selection_stock_conc != 0: # if we are selecting
+    #### Inducer 1 Logic ####
+    if elapsed_time >= inducer1_start and inducer1_stock_conc != 0: # if we are inducing
         
-        ## Selection Log Handling ##
-        file_name = f"vial{lagoon_vial}_selection_log.txt"
-        selection_log_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, 'selection_log', file_name)
-        last_line = eVOLVER.tail_to_np(selection_log_path, 1)[0]  # get last line of selection log
-        # Selection log variables
-        last_time = last_line[0]  # time of last selection calculation
-        last_selection_conc = last_line[1]  # in X final concentration, calculated concentration of selection inducer at last time
-        last_selection_time = last_line[2] # total time spent in this selection scheme
-        last_selection_target = last_line[3] # target concentration of selection inducer
+        ## Inducer 1 Log Handling ##
+        file_name = f"vial{lagoon_vial}_inducer1_log.txt"
+        inducer1_log_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, 'inducer1_log', file_name)
+        last_line = eVOLVER.tail_to_np(inducer1_log_path, 1)[0]  # get last line of inducer1 log
+        # Inducer 1 log variables
+        last_time = last_line[0]  # time of last inducer1 calculation
+        last_inducer1_conc = last_line[1]  # in X final concentration, calculated concentration of inducer1 inducer at last time
+        last_inducer1_time = last_line[2] # total time spent in this inducer1 scheme
+        last_inducer1_target = last_line[3] # target concentration of inducer1 inducer
 
         ## Initialize Variables ##
-        current_selection_conc = last_selection_conc 
-        if last_selection_target != 0:
-            selection_target = last_selection_target # in-vial concentration to reach in a given selection increment
+        current_inducer1_conc = last_inducer1_conc 
+        if last_inducer1_target != 0:
+            inducer1_target = last_inducer1_target # in-vial concentration to reach in a given inducer1 increment
         else:
-            selection_target = selection_initial_conc        
-        # Initialize selection time; counter for total time spent on this selection increment
+            inducer1_target = inducer1_initial_conc        
+        # Initialize inducer1 time; counter for total time spent on this inducer1 increment
         if config_change: # If we changed the config
-            selection_time = 0  # reset the selection time
+            inducer1_time = 0  # reset the inducer1 time
         else:
-            selection_time = last_selection_time
+            inducer1_time = last_inducer1_time
         # Check if there was a time gap
-        time_diff = elapsed_time - last_time # time since last selection log
+        time_diff = elapsed_time - last_time # time since last inducer1 log
         if time_diff > max_gap: # if there was a time gap
             time_diff = 0
                     
-        ## Selection logic ##
-        # If we are drifting and we are alternating selection with drift
-        if drifting and alternate_selection: # Do not alter selection_rate (selection_rate = 0)
-            # Calculate the current selection concentration as exponential decay
-            current_selection_conc = exponential(-lagoon_V_h, last_selection_conc, time_diff) # exponential decay
-            if print_selection:
-                print(f'Selection OFF | approximate selection concentration: {round(current_selection_conc, 4)}X')
-                logger.info(f'Selection OFF | approximate selection concentration: {round(current_selection_conc, 4)}X')
+        ## Inducer 1 logic ##
+        # If we are drifting and we are alternating inducer1 with drift
+        if drifting and alternate_inducer1: # Do not alter inducer1_rate (inducer1_rate = 0)
+            # Calculate the current inducer1 concentration as exponential decay
+            current_inducer1_conc = exponential(-lagoon_V_h, last_inducer1_conc, time_diff) # exponential decay
+            if print_inducer1:
+                print(f'Inducer 1 OFF | approximate inducer1 concentration: {round(current_inducer1_conc, 4)}X')
+                logger.info(f'Inducer 1 OFF | approximate inducer1 concentration: {round(current_inducer1_conc, 4)}X')
 
-        # If we are currently changing selection
-        elif elapsed_time >= selection_change_start and selection_final_conc != selection_initial_conc:
-            selection_time += time_diff # add the time elapsed to the selection time total
+        # If we are currently changing inducer1
+        elif elapsed_time >= inducer1_change_start and inducer1_final_conc != inducer1_initial_conc:
+            inducer1_time += time_diff # add the time elapsed to the inducer1 time total
 
-            # Update the selection target
-            if last_selection_target > selection_final_conc: # if the target is greater than the final
-                selection_target = selection_final_conc # set the target to the final
-            elif selection_time >= step_increment: # Every step_increment hours we are increasing the selection target
-                selection_slope = (selection_final_conc - selection_initial_conc) / time_to_final
-                selection_change = selection_slope * selection_time # a single step in the selection curve
-                selection_target = last_selection_target + selection_change # update the target
-                selection_time = 0  # reset the selection time
-                if print_selection:
-                    print(f'\nNew selection target: {round(selection_target, 3)}\n')
-                    logger.info(f'New selection target: {round(selection_target, 3)}')
+            # Update the inducer1 target
+            if last_inducer1_target > inducer1_final_conc: # if the target is greater than the final
+                inducer1_target = inducer1_final_conc # set the target to the final
+            elif inducer1_time >= step_increment: # Every step_increment hours we are increasing the inducer1 target
+                inducer1_slope = (inducer1_final_conc - inducer1_initial_conc) / time_to_final
+                inducer1_change = inducer1_slope * inducer1_time # a single step in the inducer1 curve
+                inducer1_target = last_inducer1_target + inducer1_change # update the target
+                inducer1_time = 0  # reset the inducer1 time
+                if print_inducer1:
+                    print(f'\nNew inducer1 target: {round(inducer1_target, 3)}\n')
+                    logger.info(f'New inducer1 target: {round(inducer1_target, 3)}')
             
-            # Calculate the current selection concentration
-            selection_rate = (lagoon_V_h / selection_stock_conc) * selection_target #Volumes/hr
-            current_selection_conc = inducer_concentration(lagoon_V_h, last_selection_conc, selection_target, time_diff)
-            if print_selection:
-                print(f'Selecting, approximate concentration: {round(current_selection_conc, 3)}X, selection_rate: {round(selection_rate, 3)}V/hr | selection_target: {round(selection_target, 3)}X')
-                logger.info(f'Selecting, approximate concentration: {round(current_selection_conc, 3)}X')
+            # Calculate the current inducer1 concentration
+            inducer1_rate = (lagoon_V_h / inducer1_stock_conc) * inducer1_target #Volumes/hr
+            current_inducer1_conc = inducer_concentration(lagoon_V_h, last_inducer1_conc, inducer1_target, time_diff)
+            if print_inducer1:
+                print(f'Inducer 1 ON, approximate concentration: {round(current_inducer1_conc, 3)}X, inducer1_rate: {round(inducer1_rate, 3)}V/hr | inducer1_target: {round(inducer1_target, 3)}X')
+                logger.info(f'Inducer 1 ON, approximate concentration: {round(current_inducer1_conc, 3)}X')
 
-        # If we are not linearly changing selection
+        # If we are not linearly changing inducer1
         else:
-            selection_rate = lagoon_V_h / selection_stock_conc  # Volumes/hr
-            current_selection_conc = selection_initial_conc # we are not
-            selection_target = selection_initial_conc
+            inducer1_rate = lagoon_V_h / inducer1_stock_conc  # Volumes/hr
+            current_inducer1_conc = inducer1_initial_conc # we are not
+            inducer1_target = inducer1_initial_conc
 
-        # Log the current selection concentration
-        text_file = open(selection_log_path, "a+")
-        text_file.write("{0},{1},{2},{3}\n".format(elapsed_time, current_selection_conc, selection_time, selection_target))
+        # Log the current inducer1 concentration
+        text_file = open(inducer1_log_path, "a+")
+        text_file.write("{0},{1},{2},{3}\n".format(elapsed_time, current_inducer1_conc, inducer1_time, inducer1_target))
         text_file.close()
     
 
     ######################################
     #### General Inducer Calculations ####
     ######################################
-    inducer_rate = [selection_rate, drift_rate] # Volumes/hr of inducer - initializing the array - [pump 5, pump 6] 
+    inducer_rate = [inducer1_rate, drift_rate] # Volumes/hr of inducer - initializing the array - [pump 5, pump 6] 
     bolus_slow_in_s = [0,0] #initialize array - calculated bolus for slow pumps
     inducer_period = [0,0] #initialize array - calculated period for slow pumps
 
     # calculate for inducer 1 - pump 5
     if inducer_rate[0] != 0:
-        bolus_slow_in_s[0] = bolus_slow / float(flow_rate[selection_pump]) #calculate bolus
+        bolus_slow_in_s[0] = bolus_slow / float(flow_rate[inducer1_pump]) #calculate bolus
         inducer_period[0] = (3600 * bolus_slow)/(inducer_rate[0] * LAGOON_VOLUME) #calculate period
     
     # calculate for inducer 2 - pump 6
