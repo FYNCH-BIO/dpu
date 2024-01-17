@@ -379,6 +379,12 @@ class EvolverNamespace(BaseNamespace):
             os.makedirs(os.path.join(EXP_DIR, 'ODset'))
             os.makedirs(os.path.join(EXP_DIR, 'growthrate'))
             os.makedirs(os.path.join(EXP_DIR, 'chemo_config'))
+            os.makedirs(os.path.join(EXP_DIR, 'chemo_log'))
+            os.makedirs(os.path.join(EXP_DIR, 'drift_config'))
+            os.makedirs(os.path.join(EXP_DIR, 'drift_log'))
+            os.makedirs(os.path.join(EXP_DIR, 'inducer1_config'))
+            os.makedirs(os.path.join(EXP_DIR, 'inducer1_log'))
+
             setup_logging(log_name, quiet, verbose)
             for x in vials:
                 exp_str = "Experiment: {0} vial {1}, {2}".format(EXP_NAME,
@@ -407,9 +413,25 @@ class EvolverNamespace(BaseNamespace):
                                   directory='growthrate')
                 # make chemostat file
                 self._create_file(x, 'chemo_config',
-                                  defaults=["0,0,0",
-                                            "0,0,0"],
+                                  defaults=["0,0,0"], # format is [elapsed_time, chemo_initial_rate[x], chemo_final_rate[x], time_to_final[x]]
                                   directory='chemo_config')
+                # make chemostat file
+                self._create_file(x, 'chemo_log',
+                                  defaults=["0,0,0"], # format is [elapsed_time, current_chemo_rate, step_time]
+                                  directory='chemo_log')
+                self._create_file(x, 'drift_config',
+                                  defaults=["0,0,0,0,0,0"], # format is [elapsed_time, drift_stock_conc, drift_interval, drift_length, interval_modifier, alternate_inducer1]
+                                  directory='drift_config')
+                self._create_file(x, 'drift_log',
+                                  defaults=["0,0,0,0,0"], # format is [elapsed_time, current_drift_conc, drift_start, drift_end, interval_count]
+                                  directory='drift_log')   
+                self._create_file(x, 'inducer1_config',
+                                  defaults=["0,0,0,0,0"], # format is [elapsed_time, inducer1_initial_conc, inducer1_final_conc, time_to_final, inducer1_change_start]
+                                  directory='inducer1_config')
+                self._create_file(x, 'inducer1_log',
+                                  defaults=["0,0,0,0"], # format is [elapsed_time, current_concentration, inducer1_time, inducer1_target]
+                                  directory='inducer1_log')
+
 
             stir_rate = STIR_INITIAL
             temp_values = TEMP_INITIAL
@@ -575,6 +597,8 @@ class EvolverNamespace(BaseNamespace):
             custom_script.chemostat(self, data, vials, elapsed_time)
         elif mode == 'growthcurve':
             custom_script.growth_curve(self, data, vials, elapsed_time)
+        elif mode == 'hybrid':
+            custom_script.hybrid(self, data, vials, elapsed_time)
         else:
             # try to load the user function
             # if failing report to user
