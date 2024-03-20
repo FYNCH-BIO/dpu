@@ -20,17 +20,23 @@ EVOLVER_PORT = 8081
 
 ##### Identify pump calibration files, define initial values for temperature, stirring, volume, power settings
 
-TEMP_INITIAL = [30] * 16 #degrees C, makes 16-value list
+TEMP_INITIAL = [37] * 16 #degrees C, makes 16-value list
 #Alternatively enter 16-value list to set different values
 #TEMP_INITIAL = [30,30,30,30,32,32,32,32,34,34,34,34,36,36,36,36]
 
-STIR_INITIAL = [8] * 16 #try 8,10,12 etc; makes 16-value list
+STIR_INITIAL = [10] * 16 #try 8,10,12 etc; makes 16-value list
 #Alternatively enter 16-value list to set different values
 #STIR_INITIAL = [7,7,7,7,8,8,8,8,9,9,9,9,10,10,10,10]
 
 VOLUME =  25 #mL, determined by vial cap straw length
 OPERATION_MODE = 'turbidostat' #use to choose between 'turbidostat' and 'chemostat' functions
 # if using a different mode, name your function as the OPERATION_MODE variable
+
+### Light Settings ###
+light1_initial = [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0] # Main light
+light2_initial = [0] * 16 # Currently unused light channel
+LIGHT_INITIAL = light1_initial + light2_initial # values between 0 and 4096
+LIGHT_CAL_FILE = 'light_cal.txt'
 
 ##### END OF USER DEFINED GENERAL SETTINGS #####
 
@@ -71,11 +77,17 @@ def turbidostat(eVOLVER, input_data, vials, elapsed_time):
 
     flow_rate = eVOLVER.get_flow_rate() #read from calibration file
 
+    light_MESSAGE = ['--'] * 32 # initializes light message
+    light_cal = eVOLVER.get_light_vals() # read from calibration file
+
     ##### Turbidostat Control Code Below #####
 
     # fluidic message: initialized so that no change is sent
     MESSAGE = ['--'] * 48
     for x in turbidostat_vials: #main loop through each vial
+        # convert light value to PWM value (based on linear calibration)
+        light_MESSAGE[x] = int((float(light1_initial[x]) - light_cal[x][1]) / light_cal[x][0])
+        light_MESSAGE[x+16] = int((float(light2_initial[x]) - light_cal[x][1]) / light_cal[x][0])
 
         # Update turbidostat configuration files for each vial
         # initialize OD and find OD path
@@ -153,10 +165,11 @@ def turbidostat(eVOLVER, input_data, vials, elapsed_time):
     if MESSAGE != ['--'] * 48:
         eVOLVER.fluid_command(MESSAGE)
 
-        # your_FB_function_here() #good spot to call feedback functions for dynamic temperature, stirring, etc for ind. vials
-    # your_function_here() #good spot to call non-feedback functions for dynamic temperature, stirring, etc.
-
     # end of turbidostat() fxn
+    
+    # send light command only if we are changing light
+    if light_MESSAGE != ['--'] * 32:
+        eVOLVER.update_light(light_MESSAGE)
 
 def chemostat(eVOLVER, input_data, vials, elapsed_time):
     OD_data = input_data['transformed']['od']
@@ -196,10 +209,15 @@ def chemostat(eVOLVER, input_data, vials, elapsed_time):
     period_config = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] #initialize array
     bolus_in_s = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] #initialize array
 
+    light_MESSAGE = ['--'] * 32 # initializes light message
+    light_cal = eVOLVER.get_light_vals() # read from calibration file
 
     ##### Chemostat Control Code Below #####
 
     for x in chemostat_vials: #main loop through each vial
+        # convert light value to PWM value (based on linear calibration)
+        light_MESSAGE[x] = int((float(light1_initial[x]) - light_cal[x][1]) / light_cal[x][0])
+        light_MESSAGE[x+16] = int((float(light2_initial[x]) - light_cal[x][1]) / light_cal[x][0])
 
         # Update chemostat configuration files for each vial
 
@@ -256,7 +274,7 @@ def chemostat(eVOLVER, input_data, vials, elapsed_time):
     eVOLVER.update_chemo(input_data, chemostat_vials, bolus_in_s, period_config) #compares computed chemostat config to the remote one
     # end of chemostat() fxn
 
-# def your_function_here(): # good spot to define modular functions for dynamics or feedback
+    eVOLVER.update_light(light_MESSAGE)
 
 if __name__ == '__main__':
     print('Please run eVOLVER.py instead')
