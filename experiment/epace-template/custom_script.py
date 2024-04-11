@@ -440,7 +440,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
         # Update drift_start and drift_end for the first interval to account for drift_OD_start and drift_expt_start
         elif (drift_start == 0) and (drift_end == 0): # if this is the first interval and drift scheduling has started
             drift_start = round(elapsed_time, 3) # starting drift from current time, rather than the experiment start time
-            drift_end = round(elapsed_time + drift_interval, 3)
+            drift_end = round(elapsed_time + drift_length, 3)
         # Experiment time gap handling
         if time_diff > max_gap: 
             # Change the start and end times of the drift to match the new elapsed time
