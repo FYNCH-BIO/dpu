@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 # If using the GUI for data visualization, do not change EXP_NAME!
 # only change if you wish to have multiple data folders within a single
 # directory for a set of scripts
-EXP_NAME = 'data'
+EXP_NAME = 'test_expt'
 
 # Port for the eVOLVER connection. You should not need to change this unless you have multiple applications on a single RPi.
-EVOLVER_PORT = 5555
+EVOLVER_PORT = 8081
 
 ##### Identify pump calibration files, define initial values for temperature, stirring, volume, power settings
 
@@ -55,8 +55,8 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     #rate_config = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
 
     # Inducer Variables
-    inducer_on = False # whether inducer is flowing or not
-    inducer_concentration = [40, 100] # X times final concentration - [pump 5, pump 6] - setting to 0 stops
+    inducer_on = True # whether inducer is flowing or not
+    inducer_concentration = [40] * 8 + [100] * 8 # X times final concentration  - setting to 0 stops
     # For example: a lagoon with chemostat running at 1 Volumes/hr / 40X inducer stock concentration = 0.025 Volumes/hr of inducer added
     # 0.025 Volumes/hr * 10mL LAGOON_VOLUME = 0.25mL of inducer stock added per hour (however the eVOLVER needs Volumes/hr)
 
@@ -87,12 +87,10 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     ##### End of Chemostat Settings #####
 
     ##### Inducer Settings #####
-    lagoon_V_hs = [rate_config[x] for x in lagoon_vials]
-
     inducer_rates = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] # Volumes/hr of inducer - initializing the array
-    for lagoon_vial_index in lagoon_vials:
-        if inducer_concentration[lagoon_vial_index] != 0:
-            inducer_rates[lagoon_vial_index] = lagoon_V_hs[lagoon_vial_index] / inducer_concentration[lagoon_vial_index]
+    for i in range(16):
+        if inducer_concentration[i] != 0:
+            inducer_rates[i] = rate_config[lagoon_vials[i % 8]] / inducer_concentration[i]
     ##### End of Inducer Settings #####
 
     flow_rate = eVOLVER.get_flow_rate() #read from calibration file

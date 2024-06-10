@@ -633,6 +633,7 @@ def get_options():
     return parser.parse_args(), parser
 
 if __name__ == '__main__':
+    print('\x1B]0;eVOLVER EXPERIMENT: PRESS Ctrl-C TO PAUSE\x07')
     options, parser = get_options()
 
 
