@@ -22,7 +22,7 @@ from custom_script import STIR_INITIAL, TEMP_INITIAL
 # Should not be changed
 # vials to be considered/excluded should be handled
 # inside the custom functions
-VIALS = [x for x in range(2)]
+VIALS = [x for x in range(16)]
 
 SAVE_PATH = os.path.dirname(os.path.realpath(__file__))
 EXP_DIR = os.path.join(SAVE_PATH, EXP_NAME)
@@ -279,31 +279,31 @@ class EvolverNamespace(BaseNamespace):
                    'recurring': False ,'immediate': True}
         self.emit('command', command, namespace='/dpu-evolver')
 
-    def update_chemo(self, data, vials, bolus_in_s, period_config, inducer_bolus = [0,0], inducer_rate = [0,0], immediate = False):
+    def update_chemo(self, data, vials, bolus_in_s, period_config, inducer_bolus = [0] * 16, inducer_rate = [0] * 16, immediate = False):
         current_pump = data['config']['pump']['value']
 
-        MESSAGE = {'fields_expected_incoming': 7,
-                   'fields_expected_outgoing': 7,
+        MESSAGE = {'fields_expected_incoming': 49,
+                   'fields_expected_outgoing': 49,
                    'recurring': True,
                    'immediate': immediate,
-                   'value': ['--'] * 6,
+                   'value': ['--'] * 48,
                    'param': 'pump'}
 
         for x in vials:
             # stop pumps if period is zero
             if period_config[x] == 0:
-                # influx
-                MESSAGE['value'][x + 2] = '0|0'
                 # efflux
+                MESSAGE['value'][x + 16] = '0|0'
+                # influx
                 MESSAGE['value'][x] = '0|0'
             else:
-                # influx
-                MESSAGE['value'][x + 2] = '%.2f|%d' % (bolus_in_s[x], period_config[x])
                 # efflux
-                MESSAGE['value'][x] = '%.2f|%d' % (bolus_in_s[x] * 2, period_config[x])
+                MESSAGE['value'][x + 16] = '%.2f|%d' % (bolus_in_s[x] * 2, period_config[x])
+                # influx
+                MESSAGE['value'][x] = '%.2f|%d' % (bolus_in_s[x], period_config[x])
 
-        MESSAGE['value'][4] = '%.2f|%d' % (inducer_bolus[0], inducer_rate[0]) #inducer 1 - pump 5
-        MESSAGE['value'][5] = '%.2f|%d' % (inducer_bolus[1], inducer_rate[1]) #inducer 2 - pump 6
+        for index in range(16):
+            MESSAGE['value'][index + 32] = '%.2f|%d' % (inducer_bolus[index], inducer_rate[index]) #inducer
 
 
         if MESSAGE['value'] != current_pump:
@@ -313,7 +313,7 @@ class EvolverNamespace(BaseNamespace):
 
     def stop_all_pumps(self, ):
         data = {'param': 'pump',
-                'value': ['0'] * 6,
+                'value': ['0'] * 48,
                 'recurring': False,
                 'immediate': True}
         logger.info('stopping all pumps')

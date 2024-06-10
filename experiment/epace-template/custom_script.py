@@ -20,11 +20,11 @@ EVOLVER_PORT = 5555
 
 ##### Identify pump calibration files, define initial values for temperature, stirring, volume, power settings
 
-TEMP_INITIAL = [37] * 2 # degrees C, makes 2-value list
+TEMP_INITIAL = [37] * 16 # degrees C, makes 2-value list
 #Alternatively enter 2-value list to set different values
 #TEMP_INITIAL = [30,37]
 
-STIR_INITIAL = [11] * 2 #try 8,10,12 etc; makes 2-value list
+STIR_INITIAL = [11] * 16 #try 8,10,12 etc; makes 2-value list
 #Alternatively enter 2-value list to set different values
 #STIR_INITIAL = [7,8]
 
@@ -44,12 +44,15 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     ##### USER DEFINED VARIABLES #####
 
     # Turbidostat Variables
-    lower_thresh = [0.9, 0] # set the lower OD threshold of the reservoir (0 for chemostat)
-    upper_thresh = [0.95, 0] # set the upper OD threshold of the reservoir (0 for chemostat)
+    lower_thresh = [0.9, 0.9, 0.9, 0.9, 0, 0, 0, 0, 0.9, 0.9, 0.9, 0.9, 0, 0, 0, 0] # set the lower OD threshold of the reservoir (0 for chemostat)
+    upper_thresh = [0.95, 0.95, 0.95, 0.95, 0, 0, 0, 0, 0.95, 0.95, 0.95, 0.95, 0, 0, 0, 0] # set the upper OD threshold of the reservoir (0 for chemostat)
     
     # Chemostat Variables
-    start_time = [0, 0] #hours, set 0 to start immediately
-    rate_config = [0.5, 0.5]  #Volumes/hr
+    start_time = [0] * 16 #hours, set 0 to start immediately
+    rate_config = [0.5] * 16  #Volumes/hr
+
+    #start_time = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    #rate_config = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
 
     # Inducer Variables
     inducer_on = False # whether inducer is flowing or not
@@ -59,15 +62,15 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
     ##### END OF USER DEFINED VARIABLES #####
 
-    reservoir_vial = 0 # Number of the reservoir vial
-    lagoon_vial = 1 # Number of the lagoon vial
+    reservoir_vials = [0, 1, 2, 3, 8, 9, 10, 11] # Number of the reservoir vial
+    lagoon_vials = [4, 5, 6, 7, 12, 13, 14, 15] # Number of the lagoon vial
 
     ##### Turbidostat Settings #####
     #Tunable settings for overflow protection, pump scheduling etc. Unlikely to change between expts
 
     time_out = 8 #(sec) additional amount of time to run efflux pump
     pump_wait = 3 # (min) minimum amount of time to wait between pump events
-    turbidostat_vials = [reservoir_vial] # zero indexed list of vials to trigger turbidostat on
+    turbidostat_vials = reservoir_vials # zero indexed list of vials to trigger turbidostat on
 
     stop_after_n_curves = np.inf #set to np.inf to never stop, or integer value to stop diluting after certain number of growth curves
     OD_values_to_average = 6  # Number of values to take in to calculate the OD average
@@ -80,30 +83,30 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     bolus = 0.5 #mL, can be changed with great caution, 0.2 is absolute minimum
     bolus_slow = 0.1 #mL, can be changed with great caution, 0.2 is absolute minimum
 
-    chemostat_vials = [0, 1] # zero indexed list of vials to trigger chemostat on
+    chemostat_vials = lagoon_vials # zero indexed list of vials to trigger chemostat on
     ##### End of Chemostat Settings #####
 
     ##### Inducer Settings #####
-    lagoon_V_h = rate_config[lagoon_vial] # lagoon Volumes/hr
+    lagoon_V_hs = [rate_config[x] for x in lagoon_vials]
 
-    inducer_rate = [0,0] # Volumes/hr of inducer - initializing the array - [pump 5, pump 6] 
-    if inducer_concentration[0] != 0:
-        inducer_rate[0] = lagoon_V_h / inducer_concentration[0] #Volumes/hr  
-    if inducer_concentration[1] != 0:
-        inducer_rate[1] = lagoon_V_h / inducer_concentration[1] #Volumes/hr  
+    inducer_rates = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] # Volumes/hr of inducer - initializing the array
+    for lagoon_vial_index in lagoon_vials:
+        if inducer_concentration[lagoon_vial_index] != 0:
+            inducer_rates[lagoon_vial_index] = lagoon_V_hs[lagoon_vial_index] / inducer_concentration[lagoon_vial_index]
     ##### End of Inducer Settings #####
 
     flow_rate = eVOLVER.get_flow_rate() #read from calibration file
-    period_config = [0,0] #initialize array
-    bolus_in_s = [0,0] #initialize array - calculated bolus for fast input pumps
-    inducer_period = [0,0] #initialize array - calculated period for slow pumps
-    bolus_slow_in_s = [0,0] #initialize array - calculated bolus for slow pumps
+    period_config = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] #initialize array
+    bolus_in_s = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] #initialize array - calculated bolus for fast input pumps
+    inducer_period = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] #initialize array - calculated period for slow pumps
+    bolus_slow_in_s = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] #initialize array - calculated bolus for slow pumps
 
     ##### TURBIDOSTAT CODE BELOW #####
 
-    # fluidic message: initialized so that no change is sent
-    MESSAGE = ['--'] * 6
-    for x in turbidostat_vials: #main loop through each vial
+    # fluidic message: initialized so that no change is sent 
+    # "--" is interpreted as "leave the last signal, do nothing" by the microcontroller
+    MESSAGE = ['--'] * 48
+    for x in turbidostat_vials: # main loop through each vial
 
         # Update turbidostat configuration files for each vial
         # initialize OD and find OD path
@@ -113,7 +116,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
         data = np.genfromtxt(ODset_path, delimiter=',')
         ODset = data[len(data)-1][1]
         ODsettime = data[len(data)-1][0]
-        num_curves=len(data)/2;
+        num_curves=len(data)/2
 
         file_name =  "vial{0}_OD.txt".format(x)
         OD_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, 'OD', file_name)
@@ -163,9 +166,9 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
                 last_pump = data[len(data)-1][0]
                 if ((elapsed_time - last_pump)*60) >= pump_wait: # if sufficient time since last pump, send command to Arduino
                     logger.info('turbidostat dilution for vial %d' % x)
+                    # efflux pump, offset is 16
+                    MESSAGE[x + 16] = str(time_in)
                     # influx pump
-                    MESSAGE[x + 2] = str(time_in)
-                    # efflux pump
                     MESSAGE[x] = str(time_in + time_out)
 
                     file_name =  "vial{0}_pump_log.txt".format(x)
@@ -178,7 +181,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
             logger.debug('not enough OD measurements for vial %d' % x)
 
     # send fluidic command only if we are actually turning on any of the pumps
-    if MESSAGE != ['--'] * 6:
+    if MESSAGE != ['--'] * 48:
         eVOLVER.fluid_command(MESSAGE)
 
         # your_FB_function_here() #good spot to call feedback functions for dynamic temperature, stirring, etc for ind. vials
@@ -218,12 +221,12 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
             if elapsed_time > start_time[x]:
 
                 #calculate time needed to pump bolus for each pump
-                bolus_in_s[x] = bolus/flow_rate[x + 2]
+                bolus_in_s[x] = bolus/flow_rate[x + 16]
                 
 
                 # calculate the period (i.e. frequency of dilution events) based on user specified growth rate and bolus size
                 if rate_config[x] > 0:
-                    if x == reservoir_vial: # volume is set depending on the vial type
+                    if x in reservoir_vials: # volume is set depending on the vial type
                         volume = VOLUME
                     else:
                         volume = LAGOON_VOLUME
@@ -246,18 +249,14 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
     # your_function_here() #good spot to call non-feedback functions for dynamic temperature, stirring, etc.
     if inducer_on:
-        # calculate for inducer 1 - pump 5
-        if inducer_rate[0] != 0:
-            bolus_slow_in_s[0] = bolus_slow / float(flow_rate[4]) #calculate bolus
-            inducer_period[0] = (3600 * bolus_slow)/(inducer_rate[0] * LAGOON_VOLUME) #calculate period
-        
-        # calculate for inducer 2 - pump 6
-        if inducer_rate[1] != 0:
-            bolus_slow_in_s[1] = bolus_slow / float(flow_rate[5]) #calculate bolus
-            inducer_period[1] = (3600 * bolus_slow)/(inducer_rate[1] * LAGOON_VOLUME) #calculate period
+        # calculate for inducer 1 - pumps 32 - 39
+        for index, inducer_rate in enumerate(inducer_rates):
+            if inducer_rate != 0:
+                bolus_slow_in_s[index] = bolus_slow / float(flow_rate[index]) #calculate bolus
+                inducer_period[index] = (3600 * bolus_slow)/(inducer_rate * LAGOON_VOLUME) #calculate period
     else:
-        inducer_period = [0,0]
-        bolus_slow_in_s = [0,0]
+        inducer_period = [0] * 16
+        bolus_slow_in_s = [0] * 16
     eVOLVER.update_chemo(input_data, chemostat_vials, bolus_in_s, period_config, bolus_slow_in_s, inducer_period) #compares computed chemostat config to the remote one
     # end of chemostat() fxn
 
