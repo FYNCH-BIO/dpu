@@ -635,18 +635,25 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     ######################################
     #### General Inducer Calculations ####
     ######################################
-    inducer_rate = [inducer1_rate, drift_rate] # Volumes/hr of inducer - initializing the array - [pump 5, pump 6] 
+    if inducer1_pump == 4 and drift_pump == 5:
+        inducer_rate = [inducer1_rate, drift_rate] # Volumes/hr of inducer - initializing the array - [pump 5, pump 6] 
+    elif inducer1_pump == 5 and drift_pump == 4:
+        inducer_rate = [drift_rate, inducer1_rate] # Volumes/hr of inducer - initializing the array - [pump 5, pump 6]
+    else:
+        logger.error('Inducer pump index error: inducer pump index of {inducer1_pump} and drift pump index of {drift_pump} not compatible.')
+        print('Inducer pump index error: inducer pump index of {inducer1_pump} and drift pump index of {drift_pump} not compatible.')
+    
     bolus_slow_in_s = [0,0] #initialize array - calculated bolus for slow pumps
     inducer_period = [0,0] #initialize array - calculated period for slow pumps
 
     # calculate for inducer 1 - pump 5
     if inducer_rate[0] != 0:
-        bolus_slow_in_s[0] = bolus_slow / float(flow_rate[inducer1_pump]) #calculate bolus
+        bolus_slow_in_s[0] = bolus_slow / float(flow_rate[4]) #calculate bolus
         inducer_period[0] = (3600 * bolus_slow)/(inducer_rate[0] * LAGOON_VOLUME) #calculate period
     
     # calculate for inducer 2 - pump 6
     if inducer_rate[1] != 0:
-        bolus_slow_in_s[1] = bolus_slow / float(flow_rate[drift_pump]) #calculate bolus
+        bolus_slow_in_s[1] = bolus_slow / float(flow_rate[5]) #calculate bolus
         inducer_period[1] = (3600 * bolus_slow)/(inducer_rate[1] * LAGOON_VOLUME) #calculate period
     
     ##### End of Inducer Calculations #####
