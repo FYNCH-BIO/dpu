@@ -75,6 +75,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     # Drift Cycling Variables
     drift_cycling = False # Whether to do scheduled drift cycles; set to False to control drift manually through setting drift_stock_conc
     max_drift_cycles = 2 # number of drift cycles to run before stopping; changing mid-experiment will reset count to 0 - setting to 0 stops
+    ON_after_cycles_end = True # whether to keep drift inducer ON after drift cycles are complete; True to keep on, False to turn off
     drift_interval = 6 # hours; time between periods of drift
     drift_length = 3 # hours; time that drift is fully on
     interval_modifier = 0 # hours; additional time added to drift_interval after each drift - count is NOT reset when drift_cycle_num is changed mid experiment
@@ -480,8 +481,14 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
         # Check if max drift cycles has been reached
         elif (interval_count >= max_drift_cycles) and (elapsed_time >= drift_end): # if we are in the last cycle of drift, stop afterwards
-            current_drift_conc = exponential(-lagoon_V_h, 1, elapsed_time - drift_end) # approximate concentration of drift inducer
-            logger.info(f'Drift ENDED | Maximum drift cycles reached: {max_drift_cycles} | Current conc {round(current_drift_conc, 3)}')
+            if ON_after_cycles_end: # if we want to maintain concentration after the last cycle
+                drifting = True
+                current_drift_conc = 1
+                logger.info(f'MAXIMUM drift cycles reached: {max_drift_cycles} | Maintaining drift inducer concentration (ON_after_cycles_end=True)')
+            else: # if we let inducer wash out of the lagoon
+                current_drift_conc = exponential(-lagoon_V_h, 1, elapsed_time - drift_end) # approximate concentration of drift inducer
+                logger.info(f'Drift ENDED | Maximum drift cycles reached: {max_drift_cycles} | Inducer washing out | Current conc {round(current_drift_conc, 3)}')
+            
             if print_drift and round(current_drift_conc, 3) != 0:
                 print(f'Drift ENDED | Maximum drift cycles reached: {max_drift_cycles} | Current conc {round(current_drift_conc, 3)}')
 
