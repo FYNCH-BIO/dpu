@@ -75,7 +75,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     # Drift Cycling Variables
     drift_cycling = False # Whether to do scheduled drift cycles; set to False to control drift manually through setting drift_stock_conc
     max_drift_cycles = 2 # number of drift cycles to run before stopping; changing mid-experiment will reset count to 0 - setting to 0 stops
-    ON_after_cycles_end = True # whether to keep drift inducer ON after drift cycles are complete; True to keep on, False to turn off
+    ON_after_cycles_end = False # whether to maintain drift inducer concentration after drift cycles are complete; True to keep drift ON, False to turn OFF after last cycle
     drift_interval = 6 # hours; time between periods of drift
     drift_length = 3 # hours; time that drift is fully on
     interval_modifier = 0 # hours; additional time added to drift_interval after each drift - count is NOT reset when drift_cycle_num is changed mid experiment
