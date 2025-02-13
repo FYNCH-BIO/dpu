@@ -44,12 +44,12 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     ##### USER DEFINED VARIABLES #####
 
     # Turbidostat Variables
-    lower_thresh = [0.9, 0.9, 0.9, 0.9, 0, 0, 0, 0, 0.9, 0.9, 0.9, 0.9, 0, 0, 0, 0] # set the lower OD threshold of the reservoir (0 for chemostat)
-    upper_thresh = [0.95, 0.95, 0.95, 0.95, 0, 0, 0, 0, 0.95, 0.95, 0.95, 0.95, 0, 0, 0, 0] # set the upper OD threshold of the reservoir (0 for chemostat)
+    lower_thresh = [0.9, 0.9, 0.9, 0.9, 0, 0, 0, 0, 0.9, 0.9, 0.9, 0.9, 0, 0, 0, 0] # set the lower OD threshold of the reservoir (0 for lagoon)
+    upper_thresh = [0.95, 0.95, 0.95, 0.95, 0, 0, 0, 0, 0.95, 0.95, 0.95, 0.95, 0, 0, 0, 0] # set the upper OD threshold of the reservoir (0 for lagoon)
     
     # Chemostat Variables
     start_time = [0] * 16 #hours, set 0 to start immediately
-    rate_config = [0.5] * 16  #Volumes/hr
+    rate_config = [0.5] * 16 # Volumes/hr; typically reservoir >= 1/3 of lagoon to keep its volume constant
 
     #start_time = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     #rate_config = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
@@ -83,7 +83,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     bolus = 0.5 #mL, can be changed with great caution, 0.2 is absolute minimum
     bolus_slow = 0.1 #mL, can be changed with great caution, 0.2 is absolute minimum
 
-    chemostat_vials = lagoon_vials # zero indexed list of vials to trigger chemostat on
+    chemostat_vials = reservoir_vials + lagoon_vials # zero indexed list of vials to trigger chemostat on
     ##### End of Chemostat Settings #####
 
     ##### Inducer Settings #####
@@ -165,9 +165,9 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
                 if ((elapsed_time - last_pump)*60) >= pump_wait: # if sufficient time since last pump, send command to Arduino
                     logger.info('turbidostat dilution for vial %d' % x)
                     # efflux pump, offset is 16
-                    MESSAGE[x + 16] = str(time_in)
+                    MESSAGE[x] = str(time_in)
                     # influx pump
-                    MESSAGE[x] = str(time_in + time_out)
+                    MESSAGE[x + 16] = str(time_in + time_out)
 
                     file_name =  "vial{0}_pump_log.txt".format(x)
                     file_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, 'pump_log', file_name)
