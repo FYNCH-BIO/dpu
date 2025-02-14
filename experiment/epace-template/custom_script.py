@@ -49,6 +49,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     
     # Chemostat Variables
     start_time = [0] * 16 #hours, set 0 to start immediately
+    chemostat_start_OD = [0] * 16 # OD above which to start chemostat; set to 0 to start immediately
     rate_config = [0.5] * 16 # Volumes/hr; typically reservoir >= 1/3 of lagoon to keep its volume constant
 
     #start_time = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -56,7 +57,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
     # Inducer Variables
     inducer_on = True # whether inducer is flowing or not
-    inducer_concentration = [40] * 8 + [100] * 8 # X times final concentration  - setting to 0 stops
+    inducer_concentration = [40] * 8 + [100] * 8 # X times final concentration  - setting to 0 stops; pumps 32 - 48
     # For example: a lagoon with chemostat running at 1 Volumes/hr / 40X inducer stock concentration = 0.025 Volumes/hr of inducer added
     # 0.025 Volumes/hr * 10mL LAGOON_VOLUME = 0.25mL of inducer stock added per hour (however the eVOLVER needs Volumes/hr)
 
@@ -164,9 +165,9 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
                 last_pump = data[len(data)-1][0]
                 if ((elapsed_time - last_pump)*60) >= pump_wait: # if sufficient time since last pump, send command to Arduino
                     logger.info('turbidostat dilution for vial %d' % x)
-                    # efflux pump, offset is 16
+                    # influx pump, offset is 16
                     MESSAGE[x] = str(time_in)
-                    # influx pump
+                    # efflux pump
                     MESSAGE[x + 16] = str(time_in + time_out)
 
                     file_name =  "vial{0}_pump_log.txt".format(x)
@@ -216,7 +217,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
             last_chemorate = chemo_config[len(chemo_config)-1][2] #should be 0 initially, then period in seconds after new commands are sent
 
             # once start time has passed and culture hits start OD, if no command has been written, write new chemostat command to file
-            if elapsed_time > start_time[x]:
+            if (elapsed_time > start_time[x]) and ((average_OD >= chemostat_start_OD[x]) or (chemostat_start_OD[x] == 0)):
 
                 #calculate time needed to pump bolus for each pump
                 bolus_in_s[x] = bolus/flow_rate[x + 16]
@@ -247,10 +248,10 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
     # your_function_here() #good spot to call non-feedback functions for dynamic temperature, stirring, etc.
     if inducer_on:
-        # calculate for inducer 1 - pumps 32 - 39
+        # calculate for inducers - pumps 32 - 48
         for index, inducer_rate in enumerate(inducer_rates):
             if inducer_rate != 0:
-                bolus_slow_in_s[index] = bolus_slow / float(flow_rate[index]) #calculate bolus
+                bolus_slow_in_s[index] = bolus_slow / float(flow_rate[index + 32]) #calculate bolus
                 inducer_period[index] = (3600 * bolus_slow)/(inducer_rate * LAGOON_VOLUME) #calculate period
     else:
         inducer_period = [0] * 16

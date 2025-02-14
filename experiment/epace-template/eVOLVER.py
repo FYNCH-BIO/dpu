@@ -292,15 +292,16 @@ class EvolverNamespace(BaseNamespace):
         for x in vials:
             # stop pumps if period is zero
             if period_config[x] == 0:
-                # efflux
-                MESSAGE['value'][x + 16] = '0|0'
                 # influx
                 MESSAGE['value'][x] = '0|0'
-            else:
                 # efflux
-                MESSAGE['value'][x + 16] = '%.2f|%d' % (bolus_in_s[x] * 2, period_config[x])
+                MESSAGE['value'][x + 16] = '0|0'
+            else:
                 # influx
                 MESSAGE['value'][x] = '%.2f|%d' % (bolus_in_s[x], period_config[x])
+                # efflux
+                MESSAGE['value'][x + 16] = '%.2f|%d' % (bolus_in_s[x] * 2,
+                                                        period_config[x])
 
         for index in range(16):
             MESSAGE['value'][index + 32] = '%.2f|%d' % (inducer_bolus[index], inducer_rate[index]) #inducer
