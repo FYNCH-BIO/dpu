@@ -3,8 +3,7 @@
 import numpy as np
 import logging
 import os.path
-import time
-import math
+from utils import file_utils, config_utils, calc_utils
 
 # logger setup
 logger = logging.getLogger(__name__)
@@ -55,14 +54,14 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     chemostat_schedule = {
         'reservoir': {
             'OD_start': 0, # hours; lagoon OD to start chemostat, set 0 to start immediately
-            'flow_rates': [0.5, 1], # Volumes/hr; a list of chemostat flow rates to use; typically reservoir >= 1/3 of lagoon to keep its volume constant
-            'times':      [5,   24], # hours; a list of times to reach the chemostat flow rates
+            'flow_rates': [0, 0.5, 1], # Volumes/hr; a list of chemostat flow rates to use; typically reservoir >= 1/3 of lagoon to keep its volume constant
+            'times':      [0, 5,   24], # hours; a list of times to reach the chemostat flow rates
             'flow_rate_mode' : 'stepwise' # 'linear' or 'stepwise'; set to 'stepwise' to use stepwise flow rate changes
         },
         'lagoon': {
             'OD_start': 0, # hours; lagoon OD to start chemostat, set 0 to start immediately
-            'flow_rates': [0.5, 1,   1.5, 2], # Volumes/hr; a list of chemostat flow rates to use
-            'times':      [24,  48,  72], # hours; a list of times to reach the chemostat flow rates
+            'flow_rates': [0, 0.5, 1,   1.5], # Volumes/hr; a list of chemostat flow rates to use
+            'times':      [0, 24,  48,  72], # hours; a list of times to reach the chemostat flow rates
             'flow_rate_mode' : 'stepwise' # 'linear' or 'stepwise'; set to 'stepwise' to use stepwise flow rate changes
         },
     }
@@ -139,107 +138,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     
     ##### END OF ADVANCED SETTINGS #####
 
-    ##################################
-    #### GENERAL HELPER FUNCTIONS ####
-    ##################################
-    def get_last_line(var_name, vial):
-        """
-        Retrieves the last line of the file for a given variable name and vial number.
-        Args:
-            var_name (str): The name of the variable.
-            vial (int): The vial number.
-        Returns:
-            tuple or numpy.ndarray: Returns the last line of the file and the path to the file.
-        """
-        # Construct file name and path
-        file_name = f"vial{vial}_{var_name}.txt"
-        file_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, f'{var_name}', file_name)
-        # Load last line from file
-        file = eVOLVER.tail_to_np(file_path, 1)[0] # get last line
-        # Get the last line from the loaded file
-        if file.ndim != 1:
-            return file_path,file[-1]
-        else:
-            return file_path,file
-
-    def compare_configs(var_name, vial, current_config):
-        """
-        Compare the current configuration with the last configuration for a given variable and vial.
-        Args:
-            var_name (str): The name of the variable.
-            vial (int): The name of the vial.
-            current_config (list): The current configuration.
-        Returns:
-            bool: True if the current configuration is different from the last configuration, False otherwise.
-        """
-        config_path,last_config = get_last_line(var_name+'_config', vial) # get last configuration and path
-        # Check if config has changed
-        if not np.array_equal(last_config[1:], current_config[1:]): # ignore the times, see if arrays are the same
-            # Write the updated configuration to the config file
-            with open(config_path, "a+") as text_file:
-                line = ','.join(str(config) for config in current_config) # Convert the list to a string with commas as separators
-                text_file.write(line+'\n') # Write the string to the file, including a newline character
-            return True # If the arrays are not the same, return True
-        else:
-            return False # If the arrays are the same, return False
-
-    # Function for exponential decay
-    def exponential(flow_rate, conc0, time):
-        """
-        Calculate the exponential growth / decay of a substance over time.
-        Args:
-            flow_rate (float): The lagoon flow rate. Negative for decay, positive for growth.
-            conc0 (float): The initial concentration of the substance.
-            time (float): The time period over which the growth is calculated.
-        Returns:
-            float: The final concentration of the substance after the given time period.
-        """
-        return conc0 * math.e ** (flow_rate * time)
-    
-    def inducer_concentration(flow_rate, conc0, conc_eq, time):
-        """
-        Calculate the concentration of the inducer in a chemostat at time t.
-        Args:
-            flow_rate (float): The lagoon flow rate.
-            conc0 (float): Initial concentration of the inducer, in X at t0.
-            conc_eq (float): Final (equilibrium) concentration, in X.
-            time (float): Current time in hours since t0.
-        Returns:
-            float: Concentration of the inducer at time t, in X.
-        """
-        return conc_eq + (conc0 - conc_eq) * np.exp(-flow_rate * time)
-        
-    def stepped_rate_modification(step_time, step_increment, initial_value, final_value, time_to_final, current_rate):
-        """
-        Calculates the new target flow rate for a fluid based on the time passed since the last step.
-        Args:
-            step_time (float): Time since last flow rate change, in hours.
-            step_increment (float): Time between each flow rate change, in hours.
-            initial_value (float): Initial flow rate value.
-            final_value (float): Final target flow rate value.
-            time_to_final (float): Total time to reach the final value from the initial value, in hours.
-            current_rate (float): Current flow rate value.
-        Returns:
-            tuple: The new target flow rate ('new_rate') and the updated step time ('step_time').
-        """
-        if initial_value == final_value:
-            raise ValueError("Initial value and final value should not be equal.")
-        if step_time < 0 or step_increment <= 0 or time_to_final <= 0:
-            raise ValueError("Time values must be positive.")
-
-        # Check if the current rate is already at or beyond the final value
-        if (initial_value < final_value and current_rate >= final_value) or (initial_value > final_value and current_rate <= final_value):
-            return final_value, step_time
-
-        # Calculate new rate if step_time is sufficient for a rate change
-        if step_time >= step_increment:
-            slope = (final_value - initial_value) / time_to_final
-            increment = slope * step_time
-            new_rate = current_rate + increment
-            return new_rate, 0
-
-        return current_rate, step_time # if nothing else, return the same target and time
-
+    config_utils.validate_chemostat_schedule(schedule) # Validate the chemostat schedule
 
     # Get ODs for use in experiment start thresholding
     vial_ODs = []
@@ -351,7 +250,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
         # Check if chemostat config has changed
         current_config = [elapsed_time, schedule['OD_start'], schedule['flow_rates'], schedule['times'], schedule['flow_rate_mode']] # Define the current configuration
-        config_change = compare_configs('chemo', x, current_config) # Check if config has changed and write to file if it has
+        config_change = config_utils.compare_configs('chemo', x, current_config) # Check if config has changed and write to file if it has
         # Print and log the drift config is updated
         if config_change:
             print(f"{vial_mapping[x].upper()} vial {x} chemostat config changed\n\tOD_start = {schedule['OD_start']}\n\tFlow Rates =        {schedule['flow_rates']}\n\tFlow Change Times = {schedule['times']}\n\tFlow Rate Mode = {schedule['flow_rate_mode']}")
@@ -359,7 +258,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
 
         ## Chemostat Log Handling ##
         # set chemostat config path and pull current state from file
-        chemolog_path,chemo_log = get_last_line('chemo_log', x)
+        chemolog_path,chemo_log = file_utils.get_last_n_lines('chemo_log', x, 1, eVOLVER.exp_dir)[0]
         last_time, last_rate, last_step_time = chemo_log
 
         ## Initialize Variables ##
@@ -401,9 +300,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
             
             # Write to chemo_log file for storage
             if current_chemo_rate[x] != last_rate: # if the rate has changed, update the log
-                text_file = open(chemolog_path, "a+")
-                text_file.write(f'{elapsed_time},{current_chemo_rate[x]},{step_time}\n')
-                text_file.close()
+                file_utils.update_log(x, 'chemo_log', elapsed_time, f"{current_chemo_rate[x]},{step_time}", eVOLVER.exp_dir)
 
             # Calculate the current chemo period
             if current_chemo_rate[x] > 0:
@@ -435,7 +332,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
  
     #### Drift Config Handling ####
     current_config = np.array([elapsed_time, drift_stock_conc, drift_interval, drift_length, interval_modifier, alternate_inducer1]) # Define the current configuration
-    config_change = compare_configs('drift', lagoon_vial, current_config) # Check if config has changed and write to file if it has
+    config_change = config_utils.compare_configs('drift', lagoon_vial, current_config) # Check if config has changed and write to file if it has
 
     # Print and log the drift config is updated
     if config_change:
@@ -481,7 +378,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
         # If we are manually turning drift on or off    
         if not drift_cycling:
             if round(last_drift_conc, 3) != 0 and drift_stock_conc == 0: # Drift inducer is off, but there is a concentration in the lagoon
-                current_drift_conc = exponential(-lagoon_V_h, 1, elapsed_time - drift_end) # therefore drift conc is in exponential decay
+                current_drift_conc = calc_utils.exponential(-lagoon_V_h, 1, elapsed_time - drift_end) # therefore drift conc is in exponential decay
                 if print_drift:
                     print(f'MANUAL DRIFT OFF | Drift inducer washing out | approximate drift inducer {round(current_drift_conc, 3)}X')
                 logger.info(f'MANUAL DRIFT OFF | Drift inducer washing out | approximate drift inducer {round(current_drift_conc, 3)}X')
@@ -500,7 +397,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
                         print(f'Drift inducer bolus added: {round(calculated_bolus, 3)}mL | Approximate concentration: {current_drift_conc}X')
                     logger.info(f'Drift inducer bolus added: {round(calculated_bolus, 3)}mL | Approximate concentration: {current_drift_conc}X')
                 elif last_drift_conc < 1: # if we are not adding an initial bolus, calculate the concentration of the inducer
-                    current_drift_conc = inducer_concentration(lagoon_V_h, last_drift_conc, 1, time_diff)
+                    current_drift_conc = calc_utils.inducer_concentration(lagoon_V_h, last_drift_conc, 1, time_diff)
 
                 if print_drift and (last_drift_conc != 1): # only print manual drift one time
                     print(f'MANUAL DRIFT ON | Approximate conc {round(current_drift_conc, 3)}X')
@@ -513,7 +410,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
                 current_drift_conc = 1
                 logger.info(f'MAXIMUM drift cycles reached: {max_drift_cycles} | Maintaining drift inducer concentration (ON_after_cycles_end=True)')
             else: # if we let inducer wash out of the lagoon
-                current_drift_conc = exponential(-lagoon_V_h, 1, elapsed_time - drift_end) # approximate concentration of drift inducer
+                current_drift_conc = calc_utils.exponential(-lagoon_V_h, 1, elapsed_time - drift_end) # approximate concentration of drift inducer
                 logger.info(f'Drift ENDED | Maximum drift cycles reached: {max_drift_cycles} | Inducer washing out | Current conc {round(current_drift_conc, 3)}')
             
             if print_drift and round(current_drift_conc, 3) != 0:
@@ -554,7 +451,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
         elif elapsed_time >= drift_end:
             drift_interval = drift_interval + interval_modifier * (interval_count - 1) # increase space between cycles each cycle
             drift_start = round((drift_end + drift_interval), 2) # set the start of the next cycle
-            current_drift_conc = exponential(-lagoon_V_h, 1, elapsed_time - drift_end) # approximate concentration of drift inducer
+            current_drift_conc = calc_utils.exponential(-lagoon_V_h, 1, elapsed_time - drift_end) # approximate concentration of drift inducer
             if print_drift:
                 print(f'Drift OFF | approximate drift inducer {round(current_drift_conc, 3)}X | Start Time {drift_start} | Current Time {elapsed_time} | End Time {drift_end}')
 
@@ -579,7 +476,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     
     #### Inducer 1 Config Handling ####
     current_config = np.array([elapsed_time, inducer1_initial_conc, inducer1_final_conc, time_to_final, inducer1_change_start]) # Define the current configuration
-    config_change = compare_configs('inducer1', lagoon_vial, current_config) # Check if config has changed and write to file if it has
+    config_change = config_utils.compare_configs('inducer1', lagoon_vial, current_config) # Check if config has changed and write to file if it has
 
     # Print and log the inducer1 config is updated
     if config_change:
@@ -620,7 +517,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
         # If we are drifting and we are alternating inducer1 with drift
         if drifting and alternate_inducer1: # Do not alter inducer1_rate (inducer1_rate = 0)
             # Calculate the current inducer1 concentration as exponential decay
-            current_inducer1_conc = exponential(-lagoon_V_h, last_inducer1_conc, time_diff) # exponential decay
+            current_inducer1_conc = calc_utils.exponential(-lagoon_V_h, last_inducer1_conc, time_diff) # exponential decay
             if print_inducer1:
                 print(f'Inducer 1 OFF | approximate inducer1 concentration: {round(current_inducer1_conc, 4)}X')
             logger.info(f'Inducer 1 OFF | approximate inducer1 concentration: {round(current_inducer1_conc, 4)}X')
@@ -643,7 +540,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
             
             # Calculate the current inducer1 concentration
             inducer1_rate = (lagoon_V_h / inducer1_stock_conc) * inducer1_target #Volumes/hr
-            current_inducer1_conc = inducer_concentration(lagoon_V_h, last_inducer1_conc, inducer1_target, time_diff)
+            current_inducer1_conc = calc_utils.inducer_concentration(lagoon_V_h, last_inducer1_conc, inducer1_target, time_diff)
             if print_inducer1:
                 print(f'Inducer 1 ON, approximate concentration: {round(current_inducer1_conc, 3)}X, inducer1_rate: {round(inducer1_rate, 3)}V/hr | inducer1_target: {round(inducer1_target, 3)}X')
             logger.info(f'Inducer 1 ON, approximate concentration: {round(current_inducer1_conc, 3)}X')
