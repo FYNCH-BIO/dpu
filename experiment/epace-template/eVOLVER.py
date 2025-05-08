@@ -413,7 +413,7 @@ class EvolverNamespace(BaseNamespace):
                                   directory='growthrate')
                 # make chemostat file
                 self._create_file(x, 'chemo_config',
-                                  defaults=["0,0,0"], # format is [elapsed_time, chemo_initial_rate[x], chemo_final_rate[x], time_to_final[x]]
+                                  defaults=["0,0,0,0,0"], # format is [elapsed_time, start_time, OD_rate, flow_rates, flow_rate_change_times, flow_rate_mode]
                                   directory='chemo_config')
                 # make chemostat file
                 self._create_file(x, 'chemo_log',

@@ -52,11 +52,25 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     upper_thresh = [0.95, 0] # set the upper OD threshold of the reservoir (0 for lagoon)
     
     ## Chemostat Variables ##
-    start_time = [0, 0] # experiment time in hours; set 0 to start immediately
-    chemo_OD_start = [0, 0] # lagoon OD to start chemostat, set 0 to start immediately
-    chemo_initial_rate = [0.5, 0.5]  # Volumes/hr; see wiki for reservoir setting example
-    chemo_final_rate = [1, 3] # Volumes/hr; typically reservoir >= 1/3 of lagoon to keep its volume constant
-    chemo_time_to_final = [24, 100] # experiment time in hours; time until final flow rate is reached
+    chemostat_schedule = {
+        'reservoir': {
+            'OD_start': 0, # hours; lagoon OD to start chemostat, set 0 to start immediately
+            'flow_rates': [0.5, 1], # Volumes/hr; a list of chemostat flow rates to use; typically reservoir >= 1/3 of lagoon to keep its volume constant
+            'times':      [5,   24], # hours; a list of times to reach the chemostat flow rates
+            'flow_rate_mode' : 'stepwise' # 'linear' or 'stepwise'; set to 'stepwise' to use stepwise flow rate changes
+        },
+        'lagoon': {
+            'OD_start': 0, # hours; lagoon OD to start chemostat, set 0 to start immediately
+            'flow_rates': [0.5, 1,   1.5, 2], # Volumes/hr; a list of chemostat flow rates to use
+            'times':      [24,  48,  72], # hours; a list of times to reach the chemostat flow rates
+            'flow_rate_mode' : 'stepwise' # 'linear' or 'stepwise'; set to 'stepwise' to use stepwise flow rate changes
+        },
+    }
+    # start_time = [0, 0] # experiment time in hours; set 0 to start immediately
+    # chemo_OD_start = [0, 0] # lagoon OD to start chemostat, set 0 to start immediately
+    # chemo_initial_rate = [0.5, 0.5]  # Volumes/hr; see wiki for reservoir setting example
+    # chemo_final_rate = [1, 3] # Volumes/hr; typically reservoir >= 1/3 of lagoon to keep its volume constant
+    # chemo_time_to_final = [24, 100] # experiment time in hours; time until final flow rate is reached
     print_chemo = True # whether to print chemostat info to terminal
 
     ## Inducer 1 Variables ## - pump 5 - commonly mutation control via arabinose
@@ -88,6 +102,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     lagoon_vial = 1 # Index of the lagoon vial
     inducer1_pump = 4 # Index of the inducer1 pump (number of pump is 5)
     drift_pump = 5 # Index of the drift pump (number of pump is 6)
+    vial_mapping = {reservoir_vial: 'reservoir', lagoon_vial: 'lagoon'} # mapping of chemostat vials to their names
 
     ## General Fluidics Settings ##
     flow_rate = eVOLVER.get_flow_rate() #read from calibration file
@@ -322,34 +337,35 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     ################################
     ##### CHEMOSTAT CODE BELOW #####
     ################################
-    period_config = [0,0] #initialize array
-    bolus_in_s = [0,0] #initialize array - calculated bolus for fast input pumps
-    current_chemo_rate = [0,0] #initialize array - rate of chemostat flow at current time
+    period_config = [0] * len(chemostat_vials)        # in seconds
+    bolus_in_s    = [0] * len(chemostat_vials)
+    current_chemo_rate = [0] * len(chemostat_vials)  # Volumes/hr
 
-    for x in chemostat_vials: #main loop through each vial
-        ## Chemostat Config Handling ##
+    for x in chemostat_vials:
+        # load schedule for this vial
+        schedule = chemostat_schedule[vial_mapping[x]]
+        od_start = schedule['OD_start']
+        rates = np.array(schedule['flow_rates'])
+        times = np.array(schedule['times'])
+        mode = schedule['flow_rate_mode']
+
         # Check if chemostat config has changed
-        current_config = [elapsed_time, chemo_initial_rate[x], chemo_final_rate[x], chemo_time_to_final[x]]
+        current_config = [elapsed_time, schedule['OD_start'], schedule['flow_rates'], schedule['times'], schedule['flow_rate_mode']] # Define the current configuration
         config_change = compare_configs('chemo', x, current_config) # Check if config has changed and write to file if it has
         # Print and log the drift config is updated
         if config_change:
-            print(f"Vial {x} chemostat config changed| Initial Rate: {chemo_initial_rate[x]} | Final Rate: {chemo_final_rate[x]} | Time to Final: {chemo_time_to_final[x]}")
-            logger.info(f"Vial {x} chemostat config changed| Initial Rate: {chemo_initial_rate[x]} | Final Rate: {chemo_final_rate[x]} | Time to Final: {chemo_time_to_final[x]}")
+            print(f"{vial_mapping[x].upper()} vial {x} chemostat config changed\n\tOD_start = {schedule['OD_start']}\n\tFlow Rates =        {schedule['flow_rates']}\n\tFlow Change Times = {schedule['times']}\n\tFlow Rate Mode = {schedule['flow_rate_mode']}")
+            logger.info(f"{vial_mapping[x].upper()} vial {x} chemostat config changed\n\tOD_start = {schedule['OD_start']}\n\tFlow Rates =        {schedule['flow_rates']}\n\tFlow Change Times = {schedule['times']}\n\tFlow Rate Mode = {schedule['flow_rate_mode']}")
 
         ## Chemostat Log Handling ##
         # set chemostat config path and pull current state from file
         chemolog_path,chemo_log = get_last_line('chemo_log', x)
-        last_time = chemo_log[0] #should t=0 initially, changes each time a new command is written to file
-        last_rate = chemo_log[1] #Volumes/hr; chemostat flow rate
-        last_step_time = chemo_log[2] # hours; time since last flow rate change
+        last_time, last_rate, last_step_time = chemo_log
 
         ## Initialize Variables ##
-        if last_rate != 0:
-            current_chemo_rate[x] = last_rate # in-vial concentration to reach in a given inducer1 increment
-        else:
-            current_chemo_rate[x] = chemo_initial_rate[x] # Volumes/hr; Initial chemostat flow rate
         if config_change: # If we changed the config
             step_time = 0  # reset the step time
+            logger.info(f'Chemostat config changed for vial {x} | step_time reset to 0')
         else:
             step_time = last_step_time # step time is the same as the last step time
         time_diff = elapsed_time - last_time # time since last chemo_log
@@ -357,7 +373,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
             time_diff = 0
 
         ## Chemostat Logic ##
-        if (elapsed_time >= start_time[x]) and ((vial_ODs[x] >= chemo_OD_start[x]) or (chemo_OD_start[x] == 0)): # Are we starting chemostat?
+        if vial_ODs[x] >= od_start or od_start == 0:
             # calculate the period (i.e. frequency of dilution events) based on user specified growth rate and bolus size
             if x == reservoir_vial: # volume is set depending on the vial type
                 volume = VOLUME
@@ -366,14 +382,25 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
             #calculate time needed to pump bolus for each pump
             bolus_in_s[x] = bolus_fast/flow_rate[x + 2]
 
-            # If we are linearly changing chemostat flow rate
-            if chemo_final_rate[x] != chemo_initial_rate[x]:
-                step_time += time_diff # time since last flow rate change
-                # Modify flow rate and step time
-                current_chemo_rate[x], step_time = stepped_rate_modification(step_time, step_increment,
-                                                                            chemo_initial_rate[x], chemo_final_rate[x],
-                                                                            chemo_time_to_final[x], current_chemo_rate[x])
-                # Write to chemo_log file for storage
+            # Find the flow rate target for the current elapsed time
+            if elapsed_time < times[0]:
+                current_chemo_rate[x] = rates[0]
+            elif elapsed_time >= times[-1]:
+                current_chemo_rate[x] = rates[-1]
+            else:
+                # Find the index of the last time point that is less than or equal to elapsed_time
+                idx = np.searchsorted(times, elapsed_time, side='right') - 1
+                if mode == 'linear':
+                    # Calculate the flow rate using linear interpolation between the two points
+                    current_chemo_rate[x] = rates[idx] + (rates[idx + 1] - rates[idx]) * ((elapsed_time - times[idx]) / (times[idx + 1] - times[idx]))
+                elif mode == 'stepwise':
+                    # Use the stepwise flow rate change
+                    current_chemo_rate[x] = rates[idx]
+                else:
+                    raise ValueError(f"Invalid flow rate mode: {mode}\n\tChoose 'linear' or 'stepwise'")
+            
+            # Write to chemo_log file for storage
+            if current_chemo_rate[x] != last_rate: # if the rate has changed, update the log
                 text_file = open(chemolog_path, "a+")
                 text_file.write(f'{elapsed_time},{current_chemo_rate[x]},{step_time}\n')
                 text_file.close()
@@ -392,8 +419,8 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
         
         else: # If we are not yet starting the lagoon
             if print_chemo:
-                print(f"Chemostat not started in vial {x} | start_time = {start_time[x]} | chemo_OD_start = {chemo_OD_start[x]} | vial_OD = {vial_ODs[x]}")
-            logger.info(f"Chemostat not started in vial {x} | start_time = {start_time[x]} | chemo_OD_start = {chemo_OD_start[x]} | vial_OD = {vial_ODs[x]}")
+                print(f"Chemostat not started in vial {x} | chemo_OD_start = {od_start} | vial_OD = {vial_ODs[x]}")
+            logger.info(f"Chemostat not started in vial {x} | chemo_OD_start = {od_start} | vial_OD = {vial_ODs[x]}")
            
 
     ################################
