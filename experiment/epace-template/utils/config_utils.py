@@ -79,7 +79,7 @@ def validate_chemostat_schedule(schedule):
         raise ValueError("Chemostat schedule validation failed:\n" + "\n".join(errors))
     return True
 
-def update_config(vial, config_name, current_config, exp_dir):
+def update_config(config_name, vial, current_config, exp_dir):
     """
     Update a configuration file with a new configuration.
     Args:
@@ -97,13 +97,13 @@ def update_config(vial, config_name, current_config, exp_dir):
         line = ','.join(str(config) for config in current_config) # Convert the list to a string with commas as separators
         text_file.write(line+'\n') # Write the string to the file, including a newline character
 
-def compare_configs(vial, current_config, config_name, exp_dir, ignore_time=True):
+def compare_configs(config_name, vial, current_config, exp_dir, ignore_time=True):
     """
     Compare the current configuration with the last configuration for a given variable and vial. Ignores the time in index 0.
     Args:
+        config_name (str): The name of the variable.
         vial (int): The name of the vial.
         current_config (list of strings): The current configuration as a list of strings.
-        config_name (str): The name of the variable.
         exp_dir (str): The directory where the configuration files are stored.
         ignore_time (bool): Whether to ignore the time in index 0 when comparing configurations.
     Returns:

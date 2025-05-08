@@ -47,16 +47,16 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     ##### USER DEFINED VARIABLES #####
 
     ## Turbidostat Variables ##
-    lower_thresh = [0.9, 0] # set the lower OD threshold of the reservoir (0 for lagoon)
-    upper_thresh = [0.95, 0] # set the upper OD threshold of the reservoir (0 for lagoon)
+    lower_thresh = [0.4, 0] # set the lower OD threshold of the reservoir (0 for lagoon)
+    upper_thresh = [0.5, 0] # set the upper OD threshold of the reservoir (0 for lagoon)
     
     ## Chemostat Variables ##
     chemostat_schedule = {
         'reservoir': {
             'OD_start': 0, # hours; lagoon OD to start chemostat, set 0 to start immediately
-            'flow_rates': [0, 0.5, 1], # Volumes/hr; a list of chemostat flow rates to use; typically reservoir >= 1/3 of lagoon to keep its volume constant
-            'times':      [0, 5,   24], # hours; a list of times to reach the chemostat flow rates
-            'flow_rate_mode' : 'stepwise' # 'linear' or 'stepwise'; set to 'stepwise' to use stepwise flow rate changes
+            'flow_rates': [0.5, 1,    1.5], # Volumes/hr; a list of chemostat flow rates to use; typically reservoir >= 1/3 of lagoon to keep its volume constant
+            'times':      [0,   0.1,  0.2], # hours; a list of times to reach the chemostat flow rates
+            'flow_rate_mode' : 'linear' # 'linear' or 'stepwise'; set to 'stepwise' to use stepwise flow rate changes
         },
         'lagoon': {
             'OD_start': 0, # hours; lagoon OD to start chemostat, set 0 to start immediately
@@ -82,7 +82,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     ## Drift Variables ## - pump 6
     drift_expt_start = 0 # experiment time in hours, set 0 to start drift immediately
     drift_OD_start = 0 # lagoon OD to start drift, set 0 to start immediately
-    drift_stock_conc = 50 # X times final concentration - SETTING TO 0 STOPS
+    drift_stock_conc = 0 # X times final concentration - SETTING TO 0 STOPS
     initial_drift_bolus = True # Whether to add an initial bolus of drift inducer to bring lagoon to 1X concentration immediately on starting drift
     print_drift = True # whether to print drift data to terminal
     # Drift Cycling Variables
@@ -138,13 +138,14 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     
     ##### END OF ADVANCED SETTINGS #####
 
-    config_utils.validate_chemostat_schedule(schedule) # Validate the chemostat schedule
+    
+    config_utils.validate_chemostat_schedule(chemostat_schedule) # Validate the chemostat schedule
 
     # Get ODs for use in experiment start thresholding
     vial_ODs = []
     for x in chemostat_vials:
         file_name =  "vial{0}_OD.txt".format(x)
-        OD_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, 'OD', file_name)
+        OD_path = os.path.join(eVOLVER.exp_dir, 'OD', file_name)
         data = eVOLVER.tail_to_np(OD_path, OD_values_to_average)
         if data.size != 0: # Check if data is not empty
             od_values_from_file = data[:,1]
@@ -168,7 +169,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
         # initialize OD and find OD path
 
         file_name =  "vial{0}_ODset.txt".format(x)
-        ODset_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, 'ODset', file_name)
+        ODset_path = os.path.join(eVOLVER.exp_dir, 'ODset', file_name)
         data = np.genfromtxt(ODset_path, delimiter=',')
         ODset = data[len(data)-1][1]
         ODsettime = data[len(data)-1][0]
@@ -190,7 +191,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
                 text_file.close()
                 ODset = lower_thresh[x]
                 # calculate growth rate
-                eVOLVER.calc_growth_rate(x, ODsettime, elapsed_time)
+                calc_utils.calc_growth_rate(x, ODsettime, elapsed_time, eVOLVER.exp_dir, logger)
 
             #if have approx. reached lower threshold, note start of growth curve in ODset
             if (average_OD < (lower_thresh[x] + (upper_thresh[x] - lower_thresh[x]) / 3)) and (ODset != upper_thresh[x]):
@@ -210,7 +211,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
                 time_in = round(time_in, 2)
 
                 file_name =  "vial{0}_pump_log.txt".format(x)
-                file_path = os.path.join(eVOLVER.exp_dir, EXP_NAME,
+                file_path = os.path.join(eVOLVER.exp_dir,
                                          'pump_log', file_name)
                 data = np.genfromtxt(file_path, delimiter=',')
                 last_pump = data[len(data)-1][0]
@@ -222,7 +223,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
                     MESSAGE[x] = str(time_in + time_out)
 
                     file_name =  "vial{0}_pump_log.txt".format(x)
-                    file_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, 'pump_log', file_name)
+                    file_path = os.path.join(eVOLVER.exp_dir, 'pump_log', file_name)
 
                     text_file = open(file_path, "a+")
                     text_file.write("{0},{1}\n".format(elapsed_time, time_in))
@@ -249,16 +250,17 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
         mode = schedule['flow_rate_mode']
 
         # Check if chemostat config has changed
-        current_config = [elapsed_time, schedule['OD_start'], schedule['flow_rates'], schedule['times'], schedule['flow_rate_mode']] # Define the current configuration
-        config_change = config_utils.compare_configs('chemo', x, current_config) # Check if config has changed and write to file if it has
+        current_config = [elapsed_time, schedule['OD_start'], '-'.join([str(i) for i in rates]), '-'.join([str(i) for i in times]), schedule['flow_rate_mode']] # Define the current configuration
+        config_change = config_utils.compare_configs('chemo_config', x, current_config, eVOLVER.exp_dir) # Check if config has changed and write to file if it has
         # Print and log the drift config is updated
         if config_change:
+            config_utils.update_config('chemo_config', x, current_config, eVOLVER.exp_dir) # Update the config file
             print(f"{vial_mapping[x].upper()} vial {x} chemostat config changed\n\tOD_start = {schedule['OD_start']}\n\tFlow Rates =        {schedule['flow_rates']}\n\tFlow Change Times = {schedule['times']}\n\tFlow Rate Mode = {schedule['flow_rate_mode']}")
             logger.info(f"{vial_mapping[x].upper()} vial {x} chemostat config changed\n\tOD_start = {schedule['OD_start']}\n\tFlow Rates =        {schedule['flow_rates']}\n\tFlow Change Times = {schedule['times']}\n\tFlow Rate Mode = {schedule['flow_rate_mode']}")
 
         ## Chemostat Log Handling ##
         # set chemostat config path and pull current state from file
-        chemolog_path,chemo_log = file_utils.get_last_n_lines('chemo_log', x, 1, eVOLVER.exp_dir)[0]
+        chemo_log = file_utils.get_last_n_lines('chemo_log', x, 1, eVOLVER.exp_dir)[0]
         last_time, last_rate, last_step_time = chemo_log
 
         ## Initialize Variables ##
@@ -309,7 +311,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
                 period_config[x] = 0
             
             # Read outs
-            if current_chemo_rate[x] != last_rate:
+            if (current_chemo_rate[x] != last_rate) and mode == 'stepwise':
                 logger.info(f'\nNew chemostat rate in vial {x}: {round(current_chemo_rate[x], 3)} | period: {round(period_config[x], 3)}s | bolus (per period): {round(bolus_in_s[x], 3)}s')
                 if print_chemo:
                     print(f'\nNew chemostat rate in vial {x}: {round(current_chemo_rate[x], 3)} | period: {round(period_config[x], 3)}s | bolus (per period): {round(bolus_in_s[x], 3)}s')
@@ -332,10 +334,11 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
  
     #### Drift Config Handling ####
     current_config = np.array([elapsed_time, drift_stock_conc, drift_interval, drift_length, interval_modifier, alternate_inducer1]) # Define the current configuration
-    config_change = config_utils.compare_configs('drift', lagoon_vial, current_config) # Check if config has changed and write to file if it has
+    config_change = config_utils.compare_configs('drift_config', lagoon_vial, current_config, eVOLVER.exp_dir) # Check if config has changed and write to file if it has
 
     # Print and log the drift config is updated
     if config_change:
+        config_utils.update_config('drift_config', lagoon_vial, current_config, eVOLVER.exp_dir)
         print(f'\nDrift Config updated, conc {current_config[1]}, interval {current_config[2]}, length {current_config[3]}, modifier {current_config[4]}, alternate_inducer1 {current_config[5]}')
         logger.info(f'Drift Config updated, conc {current_config[1]}, interval {current_config[2]}, length {current_config[3]}, modifier {current_config[4]}, alternate_inducer1 {current_config[5]}')
 
@@ -343,7 +346,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     if (elapsed_time >= drift_expt_start) and ((lagoon_OD >= drift_OD_start) or (drift_OD_start == 0)): # if drift scheduling has started
         # set drift log path and pull last state from file
         file_name =  "vial{0}_drift_log.txt".format(lagoon_vial)
-        drift_log_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, 'drift_log', file_name)
+        drift_log_path = os.path.join(eVOLVER.exp_dir, 'drift_log', file_name)
         last_line = eVOLVER.tail_to_np(drift_log_path, 1)[0] # get last line of drift log
 
         # Drift log variables
@@ -476,7 +479,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     
     #### Inducer 1 Config Handling ####
     current_config = np.array([elapsed_time, inducer1_initial_conc, inducer1_final_conc, time_to_final, inducer1_change_start]) # Define the current configuration
-    config_change = config_utils.compare_configs('inducer1', lagoon_vial, current_config) # Check if config has changed and write to file if it has
+    config_change = config_utils.compare_configs('inducer1_config', lagoon_vial, current_config, eVOLVER.exp_dir) # Check if config has changed and write to file if it has
 
     # Print and log the inducer1 config is updated
     if config_change:
@@ -489,7 +492,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
         
         ## Inducer 1 Log Handling ##
         file_name = f"vial{lagoon_vial}_inducer1_log.txt"
-        inducer1_log_path = os.path.join(eVOLVER.exp_dir, EXP_NAME, 'inducer1_log', file_name)
+        inducer1_log_path = os.path.join(eVOLVER.exp_dir, 'inducer1_log', file_name)
         last_line = eVOLVER.tail_to_np(inducer1_log_path, 1)[0]  # get last line of inducer1 log
         # Inducer 1 log variables
         last_time = last_line[0]  # time of last inducer1 calculation
