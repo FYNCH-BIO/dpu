@@ -51,26 +51,21 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
     upper_thresh = [0.5, 0] # set the upper OD threshold of the reservoir (0 for lagoon)
     
     ## Chemostat Variables ##
+    print_chemo = True # whether to print chemostat info to terminal; info will always be in /data/evolver.log and /data/chemo_log
     chemostat_schedule = {
         'reservoir': {
-            'OD_start': 0, # hours; lagoon OD to start chemostat, set 0 to start immediately
-            'flow_rates': [0.5, 1,    1.5], # Volumes/hr; a list of chemostat flow rates to use; typically reservoir >= 1/3 of lagoon to keep its volume constant
-            'times':      [0,   0.1,  0.2], # hours; a list of times to reach the chemostat flow rates
+            'OD_start': 0.5, # OD to start chemostat, set 0 to start immediately
+            'flow_rates': [0.5, 0.75, 1], # Volumes/hr; a list of chemostat flow rates to use; typically reservoir >= 1/3 of lagoon to keep its volume constant
+            'times':      [0,   24,   48], # hours; a list of times to reach the chemostat flow rates
             'flow_rate_mode' : 'linear' # 'linear' or 'stepwise'; set to 'stepwise' to use stepwise flow rate changes
         },
         'lagoon': {
-            'OD_start': 0, # hours; lagoon OD to start chemostat, set 0 to start immediately
+            'OD_start': 0, # OD to start chemostat, set 0 to start immediately
             'flow_rates': [0, 0.5, 1,   1.5], # Volumes/hr; a list of chemostat flow rates to use
             'times':      [0, 24,  48,  72], # hours; a list of times to reach the chemostat flow rates
             'flow_rate_mode' : 'stepwise' # 'linear' or 'stepwise'; set to 'stepwise' to use stepwise flow rate changes
         },
     }
-    # start_time = [0, 0] # experiment time in hours; set 0 to start immediately
-    # chemo_OD_start = [0, 0] # lagoon OD to start chemostat, set 0 to start immediately
-    # chemo_initial_rate = [0.5, 0.5]  # Volumes/hr; see wiki for reservoir setting example
-    # chemo_final_rate = [1, 3] # Volumes/hr; typically reservoir >= 1/3 of lagoon to keep its volume constant
-    # chemo_time_to_final = [24, 100] # experiment time in hours; time until final flow rate is reached
-    print_chemo = True # whether to print chemostat info to terminal
 
     ## Inducer 1 Variables ## - pump 5 - commonly mutation control via arabinose
     inducer1_start = 0 # experiment time in hours; set 0 to start immediately
@@ -191,7 +186,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
                 text_file.close()
                 ODset = lower_thresh[x]
                 # calculate growth rate
-                calc_utils.calc_growth_rate(x, ODsettime, elapsed_time, eVOLVER.exp_dir, logger)
+                calc_utils.calc_growth_rate(x, vial_mapping[x], VOLUME, ODsettime, elapsed_time, eVOLVER.exp_dir, logger)
 
             #if have approx. reached lower threshold, note start of growth curve in ODset
             if (average_OD < (lower_thresh[x] + (upper_thresh[x] - lower_thresh[x]) / 3)) and (ODset != upper_thresh[x]):

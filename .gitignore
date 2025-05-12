@@ -10,5 +10,7 @@ venv.bak/
 .DS_Store
 
 Icon
-
 Icon?
+
+data/
+__pycache__/
