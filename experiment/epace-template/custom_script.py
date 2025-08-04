@@ -151,7 +151,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
             #if need to dilute to lower threshold, then calculate amount of time to pump
             if average_OD > ODset and collecting_more_curves:
 
-                time_in = - (np.log(lower_thresh[x]/average_OD)*VOLUME)/flow_rate[x + 2]
+                time_in = - (np.log(lower_thresh[x]/average_OD)*VOLUME)/flow_rate[x]
 
                 if time_in > 20:
                     time_in = 20
@@ -220,7 +220,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
             if (elapsed_time > start_time[x]) and ((average_OD >= chemostat_start_OD[x]) or (chemostat_start_OD[x] == 0)):
 
                 #calculate time needed to pump bolus for each pump
-                bolus_in_s[x] = bolus/flow_rate[x + 16]
+                bolus_in_s[x] = bolus/flow_rate[x]
                 
 
                 # calculate the period (i.e. frequency of dilution events) based on user specified growth rate and bolus size
