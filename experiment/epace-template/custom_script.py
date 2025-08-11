@@ -186,7 +186,7 @@ def hybrid(eVOLVER, input_data, vials, elapsed_time):
                 text_file.close()
                 ODset = lower_thresh[x]
                 # calculate growth rate
-                calc_utils.calc_growth_rate(x, vial_mapping[x], VOLUME, ODsettime, elapsed_time, eVOLVER.exp_dir, logger)
+                calc_utils.calc_growth_rate(x, vial_mapping[x], ODsettime, elapsed_time, eVOLVER.exp_dir, logger)
 
             #if have approx. reached lower threshold, note start of growth curve in ODset
             if (average_OD < (lower_thresh[x] + (upper_thresh[x] - lower_thresh[x]) / 3)) and (ODset != upper_thresh[x]):

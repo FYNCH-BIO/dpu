@@ -68,8 +68,7 @@ def calc_growth_rate(vial, vial_type, volume, gr_start, elapsed_time, exp_dir, l
         # Calculate the growth rate in the reservoir
         # using the time-weighted average chemostat flow rate
         avg_chemo_rate = time_weighted_avg_chemostat_rate(vial, gr_start, elapsed_time, exp_dir)
-        Dc = avg_chemo_rate / volume
-        slope = slope + Dc
+        slope = slope + avg_chemo_rate
         
     # Save slope to file
     file_name =  "vial{0}_gr.txt".format(vial)
