@@ -31,7 +31,7 @@ def inducer_concentration(flow_rate, conc0, conc_eq, time):
     return conc_eq + (conc0 - conc_eq) * np.exp(-flow_rate * time)
 
 # GROWTH RATE UTILITIES
-def calc_growth_rate(vial, vial_type, volume, gr_start, elapsed_time, exp_dir, logger):
+def calc_growth_rate(vial, vial_type, gr_start, elapsed_time, exp_dir, logger):
     """
     Calculate the growth rate of a culture in a vial based on OD data between turbidostat dilution events.
     Originally in eVOLVER.py
